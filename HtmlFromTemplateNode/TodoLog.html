@@ -260,7 +260,7 @@
         <button class="filter-button" ng-class="{active: currentFilter === 'update'}" ng-click="setFilter('update')">Updates</button>
         <button class="filter-button" ng-class="{active: currentFilter === 'create'}" ng-click="setFilter('create')">Creates</button>
         <button class="filter-button" ng-class="{active: currentFilter === 'delete'}" ng-click="setFilter('delete')">Deletes</button>
-        <button class="filter-button" ng-class="{active: currentFilter === 'complete'}" ng-click="setFilter('complete')">Completions</button>\n        <!-- Project filter dropdown would go here -->
+        <button class="filter-button" ng-class="{active: currentFilter === 'complete'}" ng-click="setFilter('complete')">Completions</button>
         <select class="filter-button" ng-model="projectFilter" ng-change="filterByProject()">
             <option value="all">All Projects</option>
             <option ng-repeat="project in projects" value="{{project}}">{{project}}</option>
@@ -300,7 +300,6 @@
         </div>
     </div>
 </div>
-
 <script>
     /* globals scope, events, $ */
 (function(scope) {
@@ -311,7 +310,6 @@
         scope.currentFilter = 'all';
         scope.projectFilter = 'all';
         scope.projects = [
-            "All Projects",
             "regressiontestkit",
             "madness_interactive",
             "omnispindle",
