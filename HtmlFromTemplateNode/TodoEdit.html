@@ -1,0 +1,804 @@
+<!-- Todo Item Editor Panel for FastMCP Todo Server Dashboard -->
+
+<script>
+  (function(scope) {
+  // Parse JSON payload if it's a string
+  scope.$watch('msg.payload', function(payload) {
+    if (payload && typeof payload === 'string') {
+      try {
+        scope.parsedPayload = JSON.parse(payload);
+      } catch(e) {
+        console.error('Error parsing payload JSON:', e);
+        scope.parsedPayload = {};
+      }
+    } else {
+      scope.parsedPayload = payload || {};
+    }
+
+    // Log the payload for debugging
+    console.log('Received payload:', scope.parsedPayload);
+
+    // Handle status messages from backend operations
+    if (scope.parsedPayload && scope.parsedPayload.status) {
+      handleStatusMessage(scope.parsedPayload);
+    }
+
+    // Initialize edit fields immediately when payload changes
+    if (scope.parsedPayload && scope.parsedPayload.id) {
+      initializeEditFields(scope.parsedPayload);
+    }
+  });
+
+  // Function to handle status messages from backend
+  function handleStatusMessage(payload) {
+    console.log('Handling status message:', payload);
+
+    if (payload.status === 'error' || payload.status === 'success' ||
+        payload.status === 'warning' || payload.status === 'info') {
+
+      scope.updateStatus = {
+        message: payload.message || 'Operation ' + (payload.status === 'success' ? 'completed' : payload.status),
+        type: payload.status
+      };
+
+      // Automatically clear status messages after a delay
+      setTimeout(function() {
+        scope.$apply(function() {
+          scope.updateStatus = null;
+        });
+      }, 5000);
+    }
+  }
+
+  // List of available projects for dropdown
+  scope.availableProjects = [
+  "regressiontestkit",
+  "madness_interactive",
+  "omnispindle",
+  "swarmonomicon",
+  "balena_device_management",
+  "cogwyrm",
+  "docker_implementation",
+  "documentation",
+  "eventghost-rust",
+  "fastmcp",
+  "hammerghost",
+  "hammerspoon",
+  "quality_assurance",
+  "inventorium",
+  "spindlewrit"
+];
+
+  // Function to initialize edit fields with proper format handling
+  function initializeEditFields(todo) {
+    console.log('Initializing edit fields with:', todo);
+
+    // Store original data for comparison when saving
+    scope.originalTodo = JSON.parse(JSON.stringify(todo));
+
+    // Initialize edit fields with proper defaults
+    scope.editDescription = todo.description || '';
+    scope.editPriority = todo.priority ? todo.priority.toLowerCase() : 'initial';
+    scope.editStatus = todo.status ? todo.status.toLowerCase() : 'pending';
+    scope.editProject = todo.project || '';
+    scope.editDuration = todo.duration_minutes || 0;
+    scope.editNotes = todo.notes || '';
+    scope.editEnhancedDescription = todo.enhanced_description || '';
+    scope.editTicket = todo.ticket || '';
+
+    // Handle date format correctly for the date input
+    if (todo.due_date) {
+      // If due_date is already in YYYY-MM-DD format
+      if (typeof todo.due_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(todo.due_date)) {
+        scope.editDueDate = todo.due_date;
+      } else {
+        // Try to convert from timestamp or other format
+        try {
+          const date = new Date(todo.due_date);
+          if (!isNaN(date.getTime())) {
+            scope.editDueDate = date.toISOString().split('T')[0];
+          } else {
+            scope.editDueDate = '';
+          }
+        } catch(e) {
+          console.error('Error formatting date:', e);
+          scope.editDueDate = '';
+        }
+      }
+    } else {
+      scope.editDueDate = '';
+    }
+
+    console.log('Edit fields initialized:', {
+      desc: scope.editDescription,
+      priority: scope.editPriority,
+      status: scope.editStatus,
+      project: scope.editProject,
+      dueDate: scope.editDueDate,
+      duration: scope.editDuration,
+      notes: scope.editNotes
+    });
+  }
+
+  // Function to update a todo field
+  scope.updateTodoField = function(field, value) {
+    scope.send({
+      topic: "todo/action/update",
+      payload: {
+        id: scope.parsedPayload.id,
+        field: field,
+        value: value
+      }
+    });
+
+    // Show temporary feedback
+    scope.updateStatus = {
+      message: `Updating ${field}...`,
+      type: "info"
+    };
+  };
+
+  // Helper function to check if two values are different for update
+  function hasValueChanged(newVal, originalVal) {
+    // Handle undefined/null/empty string cases
+    if (newVal === undefined || newVal === null) newVal = '';
+    if (originalVal === undefined || originalVal === null) originalVal = '';
+
+    // Convert numbers to strings for comparison
+    if (typeof newVal === 'number') newVal = newVal.toString();
+    if (typeof originalVal === 'number') originalVal = originalVal.toString();
+
+    // Convert everything to strings and normalize case for comparison
+    return String(newVal).toLowerCase() !== String(originalVal).toLowerCase();
+  }
+
+  // Add a change handler to update form values and log changes
+  scope.handleFieldChange = function(field, value) {
+    console.log(`Field changed: ${field} = `, value);
+
+    // Explicitly update the scope variable
+    switch(field) {
+      case 'description':
+        scope.editDescription = value;
+        break;
+      case 'priority':
+        scope.editPriority = value;
+        break;
+      case 'status':
+        scope.editStatus = value;
+        break;
+      case 'project':
+        scope.editProject = value;
+        break;
+      case 'due_date':
+        scope.editDueDate = value;
+        break;
+      case 'duration':
+        scope.editDuration = value;
+        break;
+      case 'notes':
+        scope.editNotes = value;
+        break;
+      case 'enhanced_description':
+        scope.editEnhancedDescription = value;
+        break;
+      case 'ticket':
+        scope.editTicket = value;
+        break;
+    }
+  };
+
+  // Function to save all changes at once
+  scope.saveAllChanges = function() {
+    // Make sure we have a valid todo ID
+    if (!scope.parsedPayload || !scope.parsedPayload.id) {
+      console.error('Cannot save changes: No todo ID found');
+      scope.updateStatus = {
+        message: "Error: No todo ID found",
+        type: "error"
+      };
+      return;
+    }
+
+    // Force Angular to update scope values from DOM before saving
+    try {
+      // Use timeout to ensure DOM changes are synced to scope
+      setTimeout(function() {
+        scope.$apply();
+      }, 0);
+    } catch (e) {
+      // Ignore apply errors
+    }
+
+    // Log all form field values for debugging
+    console.log('Form field values before save:', {
+      description: scope.editDescription,
+      priority: scope.editPriority,
+      status: scope.editStatus,
+      project: scope.editProject,
+      due_date: scope.editDueDate,
+      duration: scope.editDuration,
+      notes: scope.editNotes,
+      enhanced_description: scope.editEnhancedDescription,
+      ticket: scope.editTicket
+    });
+
+    const updates = {};
+
+    // Include all non-empty fields in the update (don't try to detect changes)
+    if (scope.editDescription !== undefined) {
+      updates.description = scope.editDescription;
+    }
+
+    if (scope.editPriority !== undefined) {
+      updates.priority = scope.editPriority;
+    }
+
+    if (scope.editDueDate !== undefined) {
+      updates.due_date = scope.editDueDate;
+    }
+
+    if (scope.editStatus !== undefined) {
+      updates.status = scope.editStatus;
+    }
+
+    if (scope.editProject !== undefined) {
+      updates.project = scope.editProject;
+    }
+
+    if (scope.editDuration !== undefined) {
+      updates.duration_minutes = parseInt(scope.editDuration) || 0;
+    }
+
+    if (scope.editNotes !== undefined) {
+      updates.notes = scope.editNotes;
+    }
+
+    if (scope.editEnhancedDescription !== undefined) {
+      updates.enhanced_description = scope.editEnhancedDescription;
+    }
+
+    if (scope.editTicket !== undefined) {
+      updates.ticket = scope.editTicket;
+    }
+
+    // Log the updates for debugging
+    console.log('Sending updates:', updates);
+
+    // Only send if there are actual fields to update
+    if (Object.keys(updates).length > 0) {
+      scope.send({
+        topic: "todo/action/update_multiple",
+        payload: {
+          id: scope.parsedPayload.id,
+          updates: updates
+        }
+      });
+
+      // Show feedback to user
+      scope.updateStatus = {
+        message: "Saving changes...",
+        type: "info"
+      };
+    } else {
+      console.log('No fields to update');
+      scope.updateStatus = {
+        message: "No changes to save",
+        type: "warning"
+      };
+
+      // Set a timeout to clear the message after a few seconds
+      setTimeout(function() {
+        scope.$apply(function() {
+          scope.updateStatus = null;
+        });
+      }, 3000);
+    }
+  };
+
+  // Initialize with no update status
+  scope.updateStatus = null;
+})(scope);
+</script>
+
+<style>
+  .editor-container {
+      font-family: 'Roboto', sans-serif;
+      padding: 0 10px;
+      background-color: #f9f9fb;
+  }
+
+  .editor-header {
+      margin-bottom: 20px;
+      background-color: #1a237e;
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  }
+
+  .editor-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 5px;
+  }
+
+  .editor-form {
+      background-color: white;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+      margin-bottom: 20px;
+      border-top: 4px solid #1a237e;
+  }
+
+  .form-group {
+      margin-bottom: 12px;
+  }
+
+  .form-label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: #333;
+  }
+
+  .form-section-subtitle {
+      font-size: 13px;
+      color: #757575;
+      margin-top: -5px;
+      margin-bottom: 8px;
+  }
+
+  .form-control {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      font-size: 14px;
+      transition: all 0.2s;
+      background-color: #fcfcfc;
+  }
+
+  .form-control:focus {
+      border-color: #2196f3;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+  }
+
+  .enhanced-description {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      background-color: #f5f7fa;
+  }
+
+  .form-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+  }
+
+  .form-col {
+      flex: 1;
+  }
+
+  .btn {
+      padding: 10px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  }
+
+  .btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+
+  .btn-icon {
+      margin-right: 8px;
+  }
+
+  .btn-primary {
+      background-color: #2196f3;
+      color: white;
+  }
+
+  .btn-primary:hover {
+      background-color: #1976d2;
+  }
+
+  .btn-danger {
+      background-color: #f44336;
+      color: white;
+  }
+
+  .btn-danger:hover {
+      background-color: #d32f2f;
+  }
+
+  .btn-success {
+      background-color: #4caf50;
+      color: white;
+  }
+
+  .btn-success:hover {
+      background-color: #388e3c;
+  }
+
+  .btn-purple {
+      background-color: #9c27b0;
+      color: white;
+  }
+
+  .btn-purple:hover {
+      background-color: #8e24aa;
+  }
+
+  .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+  }
+
+  .todo-id-badge {
+      font-family: monospace;
+      font-size: 12px;
+      color: #424242;
+      background-color: #f0f0f0;
+      padding: 6px 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      display: inline-block;
+      border-left: 3px solid #1a237e;
+  }
+
+  .form-section {
+      margin-bottom: 18px;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 12px;
+  }
+
+  .form-section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a237e;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #e3f2fd;
+  }
+
+  .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+  }
+
+  .status-pending {
+      background-color: #ff9800;
+  }
+
+  .status-completed {
+      background-color: #4caf50;
+  }
+
+  .status-review {
+      background-color: #9c27b0;
+  }
+
+  .status-badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      margin-left: 10px;
+      text-transform: uppercase;
+  }
+
+  .status-pending-badge {
+      background-color: #fff3e0;
+      color: #e65100;
+  }
+
+  .status-completed-badge {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+  }
+
+  .status-review-badge {
+      background-color: #f3e5f5;
+      color: #6a1b9a;
+  }
+
+  /* Priority color indicators */
+  .priority-high {
+      border-left: 4px solid #f44336;
+  }
+
+  .priority-medium {
+      border-left: 4px solid #ff9800;
+  }
+
+  .priority-low {
+      border-left: 4px solid #4caf50;
+  }
+
+  .priority-initial {
+      border-left: 4px solid #9e9e9e;
+  }
+
+  .empty-state {
+      padding: 40px;
+      text-align: center;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      color: #757575;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
+      border: 1px dashed #ccc;
+  }
+
+  .todo-lookup {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      background-color: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+
+  .todo-lookup input {
+      flex: 1;
+  }
+
+  .update-status {
+      margin-top: 10px;
+      padding: 10px 15px;
+      border-radius: 4px;
+      font-size: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      animation: fadeIn 0.3s ease-in;
+  }
+
+  @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+  }
+
+  .update-status.info {
+      background-color: #e3f2fd;
+      color: #1565c0;
+      border-left: 4px solid #1565c0;
+  }
+
+  .update-status.success {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      border-left: 4px solid #2e7d32;
+  }
+
+  .update-status.warning {
+      background-color: #fff3e0;
+      color: #e65100;
+      border-left: 4px solid #e65100;
+  }
+
+  .update-status.error {
+      background-color: #ffebee;
+      color: #c62828;
+      border-left: 4px solid #c62828;
+  }
+
+  /* Debug info */
+  .debug-info {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+  }
+
+  /* Custom select styling */
+  select.form-control {
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Cpath fill='%23424242' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+  }
+</style>
+
+<div class="editor-container">
+  <div class="editor-header">
+      <h2 class="editor-title">Todo Item Editor</h2>
+      <p>Edit todo details and save changes to the database</p>
+  </div>
+
+  <div class="todo-lookup">
+      <input type="text" class="form-control" placeholder="Enter todo ID to edit" ng-model="todoIdToLookup" />
+      <button class="btn btn-primary" ng-click="send({topic: 'todo/action/edit', payload: {id: todoIdToLookup}})">
+          <i class="fa fa-search btn-icon"></i> Load Todo
+      </button>
+  </div>
+
+  <div ng-if="parsedPayload && parsedPayload.id" class="editor-form" ng-class="{'priority-high': editPriority === 'high', 'priority-medium': editPriority === 'medium', 'priority-low': editPriority === 'low', 'priority-initial': editPriority === 'initial'}">
+      <div class="todo-id-badge">
+          ID: {{parsedPayload.id}}
+          <span ng-if="parsedPayload.status" class="status-badge" ng-class="{'status-pending-badge': parsedPayload.status.toLowerCase() === 'pending', 'status-completed-badge': parsedPayload.status.toLowerCase() === 'completed', 'status-review-badge': parsedPayload.status.toLowerCase() === 'review'}">
+              {{parsedPayload.status}}
+          </span>
+      </div>
+
+      <div class="form-section">
+          <h3 class="form-section-title">Basic Information</h3>
+
+          <div class="form-group">
+              <label class="form-label">Description</label>
+              <input type="text" class="form-control" ng-model="editDescription" ng-change="handleFieldChange('description', editDescription)" />
+          </div>
+
+          <div class="form-row">
+              <div class="form-col">
+                  <div class="form-group">
+                      <label class="form-label">Priority</label>
+                      <select class="form-control" ng-model="editPriority" ng-change="handleFieldChange('priority', editPriority)">
+                          <option value="high">High</option>
+                          <option value="medium">Medium</option>
+                          <option value="low">Low</option>
+                          <option value="initial">Initial</option>
+                      </select>
+                  </div>
+              </div>
+
+              <div class="form-col">
+                  <div class="form-group">
+                      <label class="form-label">Status</label>
+                      <select class="form-control" ng-model="editStatus" ng-change="handleFieldChange('status', editStatus)">
+                          <option value="pending">Pending</option>
+                          <option value="completed">Completed</option>
+                          <option value="review">Review</option>
+                      </select>
+                  </div>
+              </div>
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Project</label>
+              <select class="form-control" ng-model="editProject" ng-change="handleFieldChange('project', editProject)">
+                  <option value="">-- Select Project --</option>
+                  <option ng-repeat="project in availableProjects" value="{{project}}">{{project}}</option>
+              </select>
+          </div>
+      </div>
+
+      <div class="form-section">
+          <h3 class="form-section-title">Additional Details</h3>
+
+          <div class="form-row">
+              <div class="form-col">
+                  <div class="form-group">
+                      <label class="form-label">Due Date</label>
+                      <input type="date" class="form-control" ng-model="editDueDate" ng-change="handleFieldChange('due_date', editDueDate)" />
+                  </div>
+              </div>
+
+              <div class="form-col">
+                  <div class="form-group">
+                      <label class="form-label">Duration (minutes)</label>
+                      <input type="number" class="form-control" ng-model="editDuration" ng-change="handleFieldChange('duration', editDuration)" min="0" max="480" />
+                  </div>
+              </div>
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Ticket Reference</label>
+              <input type="text" class="form-control" ng-model="editTicket" ng-change="handleFieldChange('ticket', editTicket)" placeholder="Enter ticket ID or URL" />
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Notes</label>
+              <textarea class="form-control" rows="4" ng-model="editNotes" ng-change="handleFieldChange('notes', editNotes)"></textarea>
+          </div>
+      </div>
+
+      <div class="form-section">
+          <h3 class="form-section-title">Enhanced Description</h3>
+          <p class="form-section-subtitle">Use markdown formatting for rich text</p>
+          <div class="form-group">
+              <textarea class="form-control enhanced-description" rows="8" ng-model="editEnhancedDescription" ng-change="handleFieldChange('enhanced_description', editEnhancedDescription)" placeholder="Add detailed description with markdown formatting..."></textarea>
+          </div>
+      </div>
+
+      <div class="form-section" ng-if="parsedPayload.created_at || parsedPayload.completed_at">
+          <h3 class="form-section-title">Timestamps</h3>
+
+          <div class="form-row">
+              <div class="form-col">
+                  <div class="form-group">
+                      <label class="form-label">Created At</label>
+                      <div class="timestamp-value">{{parsedPayload.created_at | date:'MMM d, yyyy h:mm a'}}</div>
+                  </div>
+              </div>
+
+              <div class="form-col" ng-if="parsedPayload.completed_at">
+                  <div class="form-group">
+                      <label class="form-label">Completed At</label>
+                      <div class="timestamp-value">{{parsedPayload.completed_at | date:'MMM d, yyyy h:mm a'}}</div>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      <div class="action-buttons">
+          <button class="btn btn-primary" ng-click="saveAllChanges()">
+              <i class="fa fa-save btn-icon"></i> Save Changes
+          </button>
+
+          <button class="btn btn-success" ng-click="updateTodoField('status', 'completed')" ng-if="editStatus !== 'completed'">
+              <i class="fa fa-check-circle btn-icon"></i> Mark Completed
+          </button>
+
+          <button class="btn btn-purple" ng-click="updateTodoField('status', 'review')" ng-if="editStatus !== 'review'">
+              <i class="fa fa-eye btn-icon"></i> Mark for Review
+          </button>
+
+          <button class="btn btn-danger" ng-click="send({topic: 'todo/action/delete', payload: {id: parsedPayload.id}})">
+              <i class="fa fa-trash btn-icon"></i> Delete Todo
+          </button>
+      </div>
+
+      <div ng-if="updateStatus" class="update-status {{updateStatus.type}}">
+          {{updateStatus.message}}
+      </div>
+  </div>
+
+  <div ng-if="!parsedPayload || !parsedPayload.id" class="empty-state">
+      <i class="fa fa-edit" style="font-size: 48px; margin-bottom: 16px; color: #1a237e;"></i>
+      <h3>No Todo Selected</h3>
+      <p>Enter a todo ID above to load and edit a todo item</p>
+  </div>
+
+  <!-- Debug section to help troubleshoot data flow (uncomment when needed) -->
+  <!--
+  <div class="debug-info">
+      <div>Topic: {{msg.topic}}</div>
+      <div>Raw Payload: {{JSON.stringify(msg.payload)}}</div>
+      <div>Current Todo ID: {{parsedPayload.id || 'None'}}</div>
+      <div ng-if="originalTodo">Original Todo: {{JSON.stringify(originalTodo)}}</div>
+      <div ng-if="updateStatus">Status: {{updateStatus.type}} - {{updateStatus.message}}</div>
+  </div>
+  -->
+</div>
+
+<!--
+Node-RED Message Format (example response):
+{
+"id": "123e4567-e89b-12d3-a456-426614174000",
+"description": "Prepare weekly report",
+"priority": "high",
+"status": "pending",
+"created_at": 1682424116000,
+"due_date": "2023-05-20",
+"duration_minutes": 60,
+"notes": "Include last week's metrics and forecasts"
+}
+-->

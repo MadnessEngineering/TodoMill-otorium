@@ -1,0 +1,1051 @@
+[
+    {
+        "id": "9975dfe614057438",
+        "type": "switch",
+        "z": "e890cb64b583ae67",
+        "name": "Route by Action",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "todo/action/get_todo_for_insights",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/copy_id",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/filter_project",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/suggestions",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/refresh_todos",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/edit",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/complete",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/update",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/update_multiple",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/delete",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/filter_status",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/filter_priority",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/filter_date",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/clear_filters",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/action/create",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 15,
+        "x": 85,
+        "y": 480,
+        "wires": [
+            [
+                "c843d2925e0307cb"
+            ],
+            [
+                "85916c4103facd4f"
+            ],
+            [
+                "d40b17f733d1ab71"
+            ],
+            [
+                "b81b9f110be9558d"
+            ],
+            [
+                "7d6325552ec7ed0a",
+                "8785d4f6e298e040"
+            ],
+            [
+                "f9b8db04cfa9cf3f"
+            ],
+            [
+                "085eea8b2f17b387"
+            ],
+            [
+                "e09056ce2617f976"
+            ],
+            [
+                "45215345cf0430c0"
+            ],
+            [
+                "2a8e336bc770947e"
+            ],
+            [
+                "22ac9e90c38881a6"
+            ],
+            [
+                "7a7df2902036d9b6"
+            ],
+            [
+                "fc1ec21245012ff3"
+            ],
+            [
+                "8e4883248d3f6123"
+            ],
+            [
+                "193dacde143c7c0b"
+            ]
+        ],
+        "inputLabels": [
+            "Action-Sub"
+        ],
+        "outputLabels": [
+            "get_todo_for_insights",
+            "copy_id",
+            "filter_project",
+            "suggestions",
+            "refresh_todos",
+            "edit",
+            "complete",
+            "update",
+            "update_multiple",
+            "delete",
+            "filter_status",
+            "filter_priority",
+            "filter_date",
+            "clear_filters",
+            "create"
+        ],
+        "icon": "font-awesome/fa-braille",
+        "l": false
+    },
+    {
+        "id": "b9cdbb33dfe0a2cd",
+        "type": "link in",
+        "z": "e890cb64b583ae67",
+        "name": "actions-sub",
+        "links": [
+            "3b8a43150f8ef5db",
+            "331cb971cae4185d",
+            "3c68bf135c197c23",
+            "21670d9ec4b93356",
+            "63b6d78efd2d69ed"
+        ],
+        "x": 25,
+        "y": 480,
+        "wires": [
+            [
+                "9975dfe614057438"
+            ]
+        ]
+    },
+    {
+        "id": "c843d2925e0307cb",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "name": "Insights-pub",
+        "mode": "link",
+        "links": [
+            "c57d98e84ba3bf45",
+            "064dba3c02da8301"
+        ],
+        "x": 135,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "85916c4103facd4f",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "name": "copy-todo-id",
+        "func": "/**\n * Copy todo ID to clipboard\n * @param {Object} msg - The message object containing the todo data\n * @param {Object} node - The node object\n * @param {Function} send - Function to send messages\n * @return {Object} - Modified message object\n */\nmodule.exports = function (msg, node, send)\n{\n    // This function will be called from the frontend\n    // The actual copy functionality is implemented in the HTML/UI side\n    // This just passes through the message for any additional processing\n\n    // The todo data should be in msg.payload\n    const todo = msg.payload;\n\n    if (!todo || !todo._id)\n    {\n        node.error(\"No valid todo ID found\");\n        msg.payload = { error: \"No valid todo ID found\" };\n        return msg;\n    }\n\n    // We just pass through the message since the clipboard copying\n    // is handled client-side in the browser\n    return msg;\n}; \n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 80,
+        "y": 260,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "d40b17f733d1ab71",
+        "type": "set-defaults",
+        "z": "e890cb64b583ae67",
+        "g": "f994973ef4b87c96",
+        "name": "",
+        "rules": [
+            {
+                "p": "payload.project",
+                "pt": "msg",
+                "to": "projectFilter",
+                "tot": "global"
+            }
+        ],
+        "chbox_DoOutputToMessage": true,
+        "chbox_SetCurrentToMsg": false,
+        "howSend": {
+            "text": "payload",
+            "type": "msg",
+            "modifiedValue": "payload"
+        },
+        "dropdown_HowManyMessages": "single",
+        "dropdownObjOrVal": "value",
+        "outputs": 1,
+        "x": 285,
+        "y": 180,
+        "wires": [
+            [
+                "ca3c7ebfe1f7faeb"
+            ]
+        ],
+        "l": false
+    },
+    {
+        "id": "b81b9f110be9558d",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "9fa5827908a49dc4",
+        "name": "get-suggestions",
+        "func": "// Get the todo ID from the payload\nconst todoId = msg.payload.id;\n\nif (!todoId) {\n    return { payload: { status: \"error\", message: \"No todo ID provided\" } };\n}\n\n// Prepare MongoDB find query\nreturn {\n    payload: {\n        // Query for MongoDB4 node format\n        filter: { id: todoId }\n    },\n    collection: \"todos\"\n};",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 630,
+        "y": 80,
+        "wires": [
+            [
+                "2e76a2925ecf7980"
+            ]
+        ]
+    },
+    {
+        "id": "7d6325552ec7ed0a",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "db5ccc8ce80d9597",
+        "name": "set-aggregate",
+        "func": "// This function prepares the MongoDB aggregation pipeline parameters\n// based on the request type and filters passed in the msg payload\n\n// Get the payload and debug\nconst payload = msg.payload || {};\nnode.warn(\"Preparing aggregate parameters with payload: \" + JSON.stringify(payload));\n\n// Default parameters\nlet match = { status: { $ne: \"completed\" } }; // Default to show pending todos\nlet sort = { priority: 1, created_at: -1 }; // Default sort by priority then date\n\n// Get project filter from global context, if it exists\nconst projectFilter = global.get(\"projectFilter\") || \"all\";\nif (projectFilter !== \"all\")\n{\n    match.project = projectFilter;\n    node.warn(\"Filtering by project: \" + projectFilter);\n}\n\n// Check if a date is specified in the payload\nif (payload.date && payload.date !== 'all')\n{\n    // Parse the date string to Date object\n    const date = new Date(payload.date);\n    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format\n\n    // Create a range for the entire day\n    const startDate = new Date(dateStr + \"T00:00:00.000Z\");\n    const endDate = new Date(dateStr + \"T23:59:59.999Z\");\n\n    // Add date filter to match stage\n    match.due_date = {\n        $gte: Math.floor(startDate.getTime() / 1000),\n        $lte: Math.floor(endDate.getTime() / 1000)\n    };\n\n    node.warn(\"Filtering by date: \" + dateStr);\n}\n\n// Prepare the aggregation pipeline\nconst pipeline = [\n    // Match stage to filter todos\n    { $match: match },\n\n    // Sort todos by priority and creation date\n    { $sort: sort },\n\n    // Limit to most important 8 todos per day\n    { $limit: 200 },\n\n    // Project to add scheduling metadata\n    {\n        $project: {\n            _id: 0,\n            id: \"$id\",\n            todo_id: \"$id\",\n            description: 1,\n            priority: 1,\n            status: 1,\n            created_at: 1,\n            // Estimate duration based on priority\n            duration_minutes: {\n                $switch: {\n                    branches: [\n                        { case: { $eq: [\"$priority\", \"high\"] }, then: 60 },\n                        { case: { $eq: [\"$priority\", \"medium\"] }, then: 45 },\n                        { case: { $eq: [\"$priority\", \"initial\"] }, then: 45 }\n                    ],\n                    default: 30  // low priority gets 30 minutes\n                }\n            },\n            project: 1,\n            due_date: 1,\n            notes: 1\n        }\n    }\n];\n\n// Set the query parameters for MongoDB\n// IMPORTANT: For MongoDB4 node, payload must be an array containing the pipeline\nmsg.payload = [pipeline];\nmsg.collection = \"todos\";\nmsg.operation = \"aggregate\";\n\nnode.warn(\"Aggregate pipeline prepared with \" + pipeline.length + \" stages\");\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 630,
+        "y": 280,
+        "wires": [
+            [
+                "8e156b49b599ed29"
+            ]
+        ],
+        "inputLabels": [
+            "Trigger dashboard update"
+        ],
+        "outputLabels": [
+            "Get Pending Todos"
+        ],
+        "icon": "node-red/db.svg"
+    },
+    {
+        "id": "8785d4f6e298e040",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "7aede22112869fce",
+        "name": "get-completed",
+        "func": "// This function prepares a query for completed todos\n// It also respects the global project filter\n\n// Default parameters\nlet match = { status: \"completed\" }; // Only completed todos\nlet sort = { completed_at: -1 }; // Sort by completion date (newest first)\nlet limit = 100; // Only 5 most recent\n\n// Get project filter from global context, if it exists\nconst projectFilter = global.get(\"projectFilter\") || \"all\";\nif (projectFilter !== \"all\")\n{\n    match.project = projectFilter;\n    node.warn(\"Filtering completed todos by project: \" + projectFilter);\n}\n\n// Prepare the aggregation pipeline\nconst pipeline = [\n    // Match stage to filter todos\n    { $match: match },\n\n    // Sort todos by completion date\n    { $sort: sort },\n\n    // Limit to most recent completed todos\n    { $limit: limit }\n];\n\n// Set the query parameters for MongoDB\n// IMPORTANT: For MongoDB4 node, payload must be an array containing the pipeline\nmsg.payload = [pipeline];\nmsg.collection = \"todos\";\nmsg.operation = \"aggregate\";\n\nnode.warn(\"Completed todos pipeline prepared with \" + pipeline.length + \" stages\");\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 630,
+        "y": 180,
+        "wires": [
+            [
+                "15bb9cf1e224aac9"
+            ]
+        ]
+    },
+    {
+        "id": "f9b8db04cfa9cf3f",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "cbb2d887d9760353",
+        "name": "find-id-to-edit",
+        "func": "// Get the todo ID from the payload\nconst todoId = msg.payload.id;\n\nif (!todoId)\n{\n    return { payload: { status: \"error\", message: \"No todo ID provided\" } };\n}\n\n// Keep track of whether this is a direct edit request (from Copy ID)\n// This flag will be used to prevent refreshing the todo list\nconst noRefresh = msg.noRefresh === true;\nconst directEdit = msg.directEdit === true;\n\n// Format according to mongodb4 node documentation\n// msg.payload must be an array of arguments for the driver operation\n// For findOne: first arg is query, second is options\n\n// Prepare arguments as documented format\nconst query = { id: todoId };\nconst options = {}; // No specific options needed for this operation\n\n// Set operation parameters according to docs\nmsg.payload = [query, options];\nmsg.collection = \"todos\";\nmsg.operation = \"findOne\";\nmsg.topic = \"todo/action/edit\"; // Keep the topic for routing\n\n// Preserve the flags for use in downstream nodes\nmsg.noRefresh = noRefresh;\nmsg.directEdit = directEdit;\n\n// Debug output\nnode.warn(\"Finding todo to edit with ID: \" + todoId + \", noRefresh: \" + noRefresh);\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 420,
+        "wires": [
+            [
+                "10141c5db597a2d1"
+            ]
+        ]
+    },
+    {
+        "id": "085eea8b2f17b387",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "name": "mark-complete",
+        "func": "// Get the todo ID from the payload\nconst todoId = msg.payload.id;\n\nif (!todoId)\n{\n    return { payload: { status: \"error\", message: \"No todo ID provided\" } };\n}\n\n// Format according to mongodb4 node documentation\n// msg.payload must be an array of arguments for the driver operation\n// For updateOne: first arg is query, second is update, third is options\n\n// Prepare arguments as documented format\nconst query = { id: todoId };\nconst update = {\n    $set: {\n        status: \"completed\",\n        completed_at: Math.floor(Date.now() / 1000)\n    }\n};\nconst options = { upsert: false };\n\n// Set operation parameters according to docs\nmsg.payload = [query, update, options];\nmsg.collection = \"todos\";\nmsg.operation = \"updateOne\";\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 630,
+        "y": 540,
+        "wires": [
+            [
+                "5986f20dd192f3d1"
+            ]
+        ]
+    },
+    {
+        "id": "e09056ce2617f976",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "name": "update-field",
+        "func": "// Get the todo ID and field update from the payload\nconst todoId = msg.payload.id;\nconst field = msg.payload.field;\nconst value = msg.payload.value;\n\nif (!todoId)\n{\n    return { payload: { status: \"error\", message: \"No todo ID provided\" } };\n}\n\nif (!field)\n{\n    return { payload: { status: \"error\", message: \"No field specified for update\" } };\n}\n\n// Create update object with stringified ID to ensure it's treated as a string\nconst updateObj = {};\nupdateObj[field] = value;\nupdateObj.last_modified = Math.floor(Date.now() / 1000);\n\n// If marking as completed, add completed_at timestamp\nif (field === 'status' && value === 'completed')\n{\n    updateObj.completed_at = Math.floor(Date.now() / 1000);\n}\n\n// Format according to mongodb4 node documentation\n// msg.payload must be an array of arguments for the driver operation\n// For updateOne: first arg is query, second is update, third is options\n\n// Prepare arguments as documented format\nconst query = { id: String(todoId) };\nconst update = { $set: updateObj };\nconst options = { upsert: false };\n\n// Set operation parameters according to docs\nmsg.payload = [query, update, options];\nmsg.collection = \"todos\";\nmsg.operation = \"updateOne\";\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 580,
+        "wires": [
+            [
+                "0cccd80571ac3f9e"
+            ]
+        ]
+    },
+    {
+        "id": "45215345cf0430c0",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "name": "update-multi",
+        "func": "// Function to handle multiple field updates for a todo item\n// This function receives a todo ID and an object with multiple field updates\n// and processes them in a single MongoDB update operation\n\n// Get the todo ID and updates from the payload\nconst todoId = msg.payload.id;\nconst updates = msg.payload.updates || {};\n\n// Log the received updates for debugging\nnode.warn(\"Processing update_multiple for todo: \" + todoId);\nnode.warn(\"Updates: \" + JSON.stringify(updates));\n\nif (!todoId) {\n    return {\n        payload: {\n            status: \"error\",\n            message: \"No todo ID provided\"\n        },\n        topic: \"todo/dashboard/editor\"\n    };\n}\n\nif (Object.keys(updates).length === 0) {\n    return {\n        payload: {\n            status: \"error\",\n            message: \"No updates provided\"\n        },\n        topic: \"todo/dashboard/editor\"\n    };\n}\n\n// Normalize field values before updating\nconst normalizedUpdates = {};\n\n// Process each field with appropriate data type and validation\nObject.keys(updates).forEach(key => {\n    let value = updates[key];\n\n    // Process each field based on its expected type\n    switch (key) {\n        case 'priority':\n            // Ensure consistent casing for priority\n            if (value) {\n                normalizedUpdates.priority = value.toLowerCase();\n            }\n            break;\n\n        case 'status':\n            // Ensure consistent casing for status\n            if (value) {\n                normalizedUpdates.status = value.toLowerCase();\n            }\n            break;\n\n        case 'duration_minutes':\n            // Ensure duration is a number\n            normalizedUpdates.duration_minutes = parseInt(value) || 0;\n            break;\n\n        case 'due_date':\n            // Ensure date is in proper format if not empty\n            if (value && value.trim() !== '') {\n                normalizedUpdates.due_date = value;\n            } else {\n                normalizedUpdates.due_date = '';\n            }\n            break;\n\n        case 'notes':\n            // Ensure notes field is a string\n            normalizedUpdates.notes = value || '';\n            break;\n\n        case 'enhanced_description':\n            // Ensure enhanced_description field is a string\n            normalizedUpdates.enhanced_description = value || '';\n            break;\n\n        case 'ticket':\n            // Ensure ticket field is a string and normalize format\n            if (value && value.trim() !== '') {\n                // Remove any extra whitespace and normalize\n                normalizedUpdates.ticket = value.trim();\n            } else {\n                normalizedUpdates.ticket = '';\n            }\n            break;\n\n        default:\n            // For other fields, just pass the value through\n            normalizedUpdates[key] = value;\n    }\n});\n\n// Add last_modified timestamp\nnormalizedUpdates.last_modified = Math.floor(Date.now() / 1000);\n\n// If marking as completed, add completed_at timestamp\nif (normalizedUpdates.status === 'completed') {\n    normalizedUpdates.completed_at = Math.floor(Date.now() / 1000);\n}\n\n// Log normalized updates\nnode.warn(\"Normalized updates: \" + JSON.stringify(normalizedUpdates));\nnode.warn(\"Original vs normalized case comparison:\");\nObject.keys(updates).forEach(key => {\n    if (typeof updates[key] === 'string' && normalizedUpdates[key] !== updates[key]) {\n        node.warn(`Field \"${key}\": \"${updates[key]}\" → \"${normalizedUpdates[key]}\"`);\n    }\n});\n\n// Format according to mongodb4 node documentation\n// msg.payload must be an array of arguments for the driver operation\n// For updateOne: first arg is query, second is update, third is options\n\n// Prepare arguments as documented format\nconst query = { id: String(todoId) };\nconst update = { $set: normalizedUpdates };\nconst options = { upsert: false };\n\n// Set operation parameters according to docs\nmsg.payload = [query, update, options];\nmsg.collection = \"todos\";\nmsg.operation = \"updateOne\";\n\n// Add response routing topic to ensure result goes back to editor\nmsg.topic = \"todo/action/update_multiple\";\n\n// Log the operation for debugging\nnode.warn(\"Sending MongoDB updateOne operation for todo ID: \" + todoId);\n\n// Return the message for further processing\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 620,
+        "wires": [
+            [
+                "0cccd80571ac3f9e"
+            ]
+        ]
+    },
+    {
+        "id": "2a8e336bc770947e",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "name": "delete-todo",
+        "func": "// Get the todo ID from the payload\nconst todoId = msg.payload.id;\n\nif (!todoId)\n{\n    return { payload: { status: \"error\", message: \"No todo ID provided\" } };\n}\n\n// Check if the ID is a string and if it might be an ObjectId\nlet filterQuery = {};\nif (todoId.length === 24 && /^[0-9a-fA-F]{24}$/.test(todoId))\n{\n    // This might be an ObjectId - set up filter to try both id and _id\n    filterQuery = { $or: [{ id: todoId }, { _id: todoId }] };\n} else\n{\n    // Just use id as a string\n    filterQuery = { id: todoId };\n}\n\n// Format according to mongodb4 node documentation\n// msg.payload must be an array of arguments for the driver operation\n// For deleteOne: first arg is filter, second is options\n\n// Set operation parameters according to docs\nmsg.payload = [filterQuery, {}]; // Filter and empty options\nmsg.collection = \"todos\";\nmsg.operation = \"deleteOne\";\nmsg.topic = \"todo/action/delete\"; // Keep the topic for routing\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 660,
+        "wires": [
+            [
+                "a25dd6b2b2f5f12e"
+            ]
+        ]
+    },
+    {
+        "id": "22ac9e90c38881a6",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "6b213e2487e72b2d",
+        "name": "filter-status",
+        "func": "// This function processes the status filter selection\n// and initiates a refresh of the todo list\n\n// Extract status from payload\nconst status = msg.payload.status || \"all\";\n\n// Store in global context for use by other nodes\nglobal.set(\"statusFilter\", status);\n\n// Log what we're doing\nnode.warn(\"Setting status filter to: \" + status);\n\n// Return message to refresh the todo list with new filter\nreturn {\n    topic: \"todo/action/refresh_todos\",\n    payload: {\n        refreshType: \"status_filter\",\n        status: status\n    }\n}; \n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 240,
+        "y": 660,
+        "wires": [
+            [
+                "3c68bf135c197c23"
+            ]
+        ]
+    },
+    {
+        "id": "7a7df2902036d9b6",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "6b213e2487e72b2d",
+        "name": "filter-priority",
+        "func": "// This function processes the priority filter selection\n// and initiates a refresh of the todo list\n\n// Extract priority from payload\nconst priority = msg.payload.priority || \"all\";\n\n// Store in global context for use by other nodes\nglobal.set(\"priorityFilter\", priority);\n\n// Log what we're doing\nnode.warn(\"Setting priority filter to: \" + priority);\n\n// Return message to refresh the todo list with new filter\nreturn {\n    topic: \"todo/action/refresh_todos\",\n    payload: {\n        refreshType: \"priority_filter\",\n        priority: priority\n    }\n}; \n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 240,
+        "y": 700,
+        "wires": [
+            [
+                "3c68bf135c197c23"
+            ]
+        ]
+    },
+    {
+        "id": "fc1ec21245012ff3",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "6b213e2487e72b2d",
+        "name": "filter-date",
+        "func": "// This function processes the date filter selection\n// and initiates a refresh of the todo list\n\n// Extract date from payload - could be Date object or string\nlet dateValue = msg.payload.date || null;\n\n// Try to ensure we have a valid date format\nif (dateValue) {\n    try {\n        // If it's already a Date object, convert to ISO string\n        if (dateValue instanceof Date) {\n            dateValue = dateValue.toISOString().split('T')[0]; // YYYY-MM-DD format\n        } else if (typeof dateValue === 'string') {\n            // Parse string to Date object and back to standardized format\n            const parsedDate = new Date(dateValue);\n            if (!isNaN(parsedDate.getTime())) { // Check if valid date\n                dateValue = parsedDate.toISOString().split('T')[0]; // YYYY-MM-DD format\n            } else {\n                node.warn(\"Invalid date format provided: \" + dateValue);\n                dateValue = null;\n            }\n        } else {\n            node.warn(\"Unsupported date format provided\");\n            dateValue = null;\n        }\n    } catch (error) {\n        node.warn(\"Error processing date: \" + error.message);\n        dateValue = null;\n    }\n}\n\n// Store in global context for use by other nodes\nglobal.set(\"dateFilter\", dateValue);\n\n// Log what we're doing\nnode.warn(\"Setting date filter to: \" + (dateValue || \"none\"));\n\n// Return message to refresh the todo list with new filter\nreturn {\n    topic: \"todo/action/refresh_todos\",\n    payload: {\n        refreshType: \"date_filter\",\n        date: dateValue\n    }\n}; \n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 230,
+        "y": 740,
+        "wires": [
+            [
+                "3c68bf135c197c23"
+            ]
+        ]
+    },
+    {
+        "id": "8e4883248d3f6123",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "6b213e2487e72b2d",
+        "name": "clear-filters",
+        "func": "// This function clears all filter settings\n// and initiates a refresh of the todo list\n\n// Reset all filters in global context\nglobal.set(\"projectFilter\", \"all\");\nglobal.set(\"statusFilter\", \"all\");\nglobal.set(\"priorityFilter\", \"all\");\nglobal.set(\"dateFilter\", null);\n\n// Log what we're doing\nnode.warn(\"Clearing all filter settings\");\n\n// Return message to refresh the todo list with no filters\nreturn {\n    topic: \"todo/action/refresh_todos\",\n    payload: {\n        refreshType: \"clear_filters\",\n        clear_filters: true\n    }\n}; \n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 240,
+        "y": 780,
+        "wires": [
+            [
+                "3c68bf135c197c23"
+            ]
+        ]
+    },
+    {
+        "id": "193dacde143c7c0b",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "name": "create-todo",
+        "func": "// This function prepares a blank todo template\n// for the editor to create a new todo\n\n// Get current timestamp\nconst now = Math.floor(Date.now() / 1000);\n\n// Get project from filter if available\nconst projectFilter = global.get(\"projectFilter\") || \"all\";\nconst defaultProject = projectFilter !== \"all\" ? projectFilter : \"\";\n\n// Generate a unique ID for the new todo\nconst generateUUID = () => {\n    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {\n        const r = Math.random() * 16 | 0;\n        const v = c === 'x' ? r : (r & 0x3 | 0x8);\n        return v.toString(16);\n    });\n};\n\n// Create a blank todo template\nconst newTodo = {\n    id: generateUUID(),\n    description: \"\",\n    priority: \"initial\",\n    status: \"pending\",\n    project: defaultProject,\n    created_at: now,\n    last_modified: now,\n    notes: \"\",\n    enhanced_description: \"\"\n};\n\n// Pass the new todo to the editor\nreturn {\n    payload: newTodo,\n    topic: \"todo/dashboard/editor\",\n    isNewTodo: true\n}; \n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 180,
+        "y": 900,
+        "wires": [
+            [
+                "269581e68f7b96f8"
+            ]
+        ]
+    },
+    {
+        "id": "ca3c7ebfe1f7faeb",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "f994973ef4b87c96",
+        "name": "Project-filter",
+        "func": "// This function sets the project filter in global context\n// and initiates a refresh of the todo list and suggestions\n\n// Extract project from payload\nconst projectFilter = msg.payload.project || \"all\";\n\n// Store in global context for use by other nodes\nglobal.set(\"projectFilter\", projectFilter);\n\n// Log what we're doing\nnode.warn(\"Setting project filter to: \" + projectFilter);\n\n// Return two messages: one to refresh todos and one to refresh suggestions\nreturn [\n    {\n        topic: \"todo/action/refresh_suggestions\",\n        payload: 1\n    },\n    {\n        topic: \"todo/action/refresh_todos\",\n        payload: 1\n    },\n    {\n        topic: \"todo/action/refresh_todos\",\n        payload: 1\n    }\n]; \n",
+        "outputs": 3,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 180,
+        "wires": [
+            [
+                "b81b9f110be9558d"
+            ],
+            [
+                "8785d4f6e298e040"
+            ],
+            [
+                "7d6325552ec7ed0a"
+            ]
+        ]
+    },
+    {
+        "id": "2e76a2925ecf7980",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "9fa5827908a49dc4",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "todos",
+        "operation": "find",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "DB-FindTodo2",
+        "x": 810,
+        "y": 80,
+        "wires": [
+            [
+                "8d64470b81c86657"
+            ]
+        ]
+    },
+    {
+        "id": "5af0f9a96534bde4",
+        "type": "change",
+        "z": "e890cb64b583ae67",
+        "g": "a78b509a82385b19",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "{}",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 435,
+        "y": 60,
+        "wires": [
+            [
+                "7d6325552ec7ed0a",
+                "8785d4f6e298e040"
+            ]
+        ],
+        "l": false
+    },
+    {
+        "id": "8e156b49b599ed29",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "db5ccc8ce80d9597",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "todos",
+        "operation": "aggregate",
+        "output": "toArray",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "DB-GetPending",
+        "x": 810,
+        "y": 280,
+        "wires": [
+            [
+                "c9be399814791e95"
+            ]
+        ]
+    },
+    {
+        "id": "15bb9cf1e224aac9",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "7aede22112869fce",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "todos",
+        "operation": "aggregate",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "DB-GetCompleted",
+        "x": 820,
+        "y": 180,
+        "wires": [
+            [
+                "a6db9f1e0da9ef65"
+            ]
+        ]
+    },
+    {
+        "id": "10141c5db597a2d1",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "cbb2d887d9760353",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "todos",
+        "operation": "find",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "DB-FindTodo",
+        "x": 640,
+        "y": 420,
+        "wires": [
+            [
+                "4ba8ed04634ace50"
+            ]
+        ]
+    },
+    {
+        "id": "5986f20dd192f3d1",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "todos",
+        "operation": "updateOne",
+        "output": "toArray",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "DB-CompleteTodo",
+        "x": 820,
+        "y": 540,
+        "wires": [
+            [
+                "154f2ad042c04c47"
+            ]
+        ]
+    },
+    {
+        "id": "0cccd80571ac3f9e",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "todos",
+        "operation": "updateOne",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "DB-UpdateTodo",
+        "x": 810,
+        "y": 600,
+        "wires": [
+            [
+                "154f2ad042c04c47"
+            ]
+        ]
+    },
+    {
+        "id": "a25dd6b2b2f5f12e",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "todos",
+        "operation": "deleteOne",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "DB-DeleteTodo",
+        "x": 810,
+        "y": 660,
+        "wires": [
+            [
+                "154f2ad042c04c47"
+            ]
+        ]
+    },
+    {
+        "id": "3c68bf135c197c23",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "6b213e2487e72b2d",
+        "name": "action-pub",
+        "mode": "link",
+        "links": [
+            "af45aadd044350e0",
+            "b9cdbb33dfe0a2cd"
+        ],
+        "x": 420,
+        "y": 720,
+        "wires": [],
+        "l": true
+    },
+    {
+        "id": "269581e68f7b96f8",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "name": "dashboard-pub",
+        "mode": "link",
+        "links": [
+            "8d670b8299f89a5b",
+            "9348ae0a3e0c29ad"
+        ],
+        "x": 370,
+        "y": 900,
+        "wires": [],
+        "l": true
+    },
+    {
+        "id": "8d64470b81c86657",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "9fa5827908a49dc4",
+        "name": "process-result",
+        "func": "// Check if we found a todo\nif (!msg.payload || msg.payload.length === 0) {\n    return { payload: { status: \"error\", message: \"Todo not found\" } };\n}\n\n// Get the first todo from the results\nconst todo = msg.payload[0];\n\n// Check which action we're performing\nif (msg.topic === \"todo/action/suggestions\") {\n    // Create a specific suggestion response for this todo\n    const response = {\n        todo: {\n            id: todo.id,\n            description: todo.description,\n            current_priority: todo.priority || \"medium\",\n            status: todo.status\n        },\n        suggestions: {\n            suggested_priority: suggestPriority(todo),\n            estimated_completion_time: estimateCompletionTime(todo),\n            automation_confidence: Math.round(60 + Math.random() * 25)\n        }\n    };\n    \n    return {\n        payload: response,\n        topic: \"todo/dashboard/suggestions\"\n    };\n} else if (msg.topic.includes(\"schedule\")) {\n    // Get the date (either from the msg.date or default to tomorrow)\n    const targetDate = msg.date || (() => {\n        const tomorrow = new Date();\n        tomorrow.setDate(tomorrow.getDate() + 1);\n        return tomorrow.toISOString().split('T')[0];\n    })();\n    \n    // Create a schedule specifically for this todo\n    const scheduleResponse = createScheduleForTodo(todo, targetDate);\n    \n    return {\n        payload: scheduleResponse,\n        topic: \"todo/dashboard/schedule\"\n    };\n}\n\n// Helper function to suggest priority\nfunction suggestPriority(todo) {\n    // Simple logic - but in real app would be more sophisticated\n    const description = todo.description.toLowerCase();\n    \n    if (description.includes(\"urgent\") || description.includes(\"important\")) {\n        return \"high\";\n    }\n    \n    if (description.includes(\"review\") || description.includes(\"meeting\")) {\n        return \"medium\";\n    }\n    \n    return todo.priority || \"medium\";\n}\n\n// Helper function to estimate completion time\nfunction estimateCompletionTime(todo) {\n    // Simple logic - but in real app would analyze similar tasks\n    const priority = todo.priority || \"medium\";\n    \n    // Estimate in minutes\n    const estimates = {\n        \"high\": 90,\n        \"medium\": 60,\n        \"low\": 45,\n        \"initial\": 60\n    };\n    \n    return estimates[priority];\n}\n\n// Create a schedule for a specific todo\nfunction createScheduleForTodo(todo, dateStr) {\n    // Create a Date object from the target date\n    const date = new Date(dateStr);\n    const weekday = [\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"][date.getDay()];\n    \n    // Define working hours based on the day of the week\n    let workingHours;\n    const day = date.getDay();\n    \n    if (day === 0) { // Sunday\n        workingHours = { start: \"10:00\", end: \"14:00\" };\n    } else if (day === 6) { // Saturday\n        workingHours = { start: \"10:00\", end: \"15:00\" };\n    } else { // Weekday\n        workingHours = { start: \"09:00\", end: \"17:00\" };\n    }\n    \n    // Calculate available minutes\n    function timeToMinutes(timeStr) {\n        const [hours, minutes] = timeStr.split(':').map(Number);\n        return hours * 60 + minutes;\n    }\n    \n    function minutesToTime(totalMinutes) {\n        const hours = Math.floor(totalMinutes / 60);\n        const minutes = totalMinutes % 60;\n        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;\n    }\n    \n    const startMinutes = timeToMinutes(workingHours.start);\n    const endMinutes = timeToMinutes(workingHours.end);\n    const availableMinutes = endMinutes - startMinutes;\n    \n    // Duration based on priority\n    const durations = {\n        \"high\": 90,\n        \"medium\": 60,\n        \"low\": 45,\n        \"initial\": 60\n    };\n    \n    const duration = durations[todo.priority || \"medium\"];\n    \n    // Calculate a good time slot based on priority\n    let startTimeMinutes;\n    if (todo.priority === \"high\") {\n        // Schedule high priority in the morning\n        startTimeMinutes = startMinutes + 60; // 1 hour after start\n    } else if (todo.priority === \"low\") {\n        // Schedule low priority in the afternoon\n        startTimeMinutes = endMinutes - duration - 60; // 1 hour before end\n    } else {\n        // Schedule medium priority in mid-day\n        startTimeMinutes = startMinutes + Math.floor((availableMinutes - duration) / 2);\n    }\n    \n    // Ensure within bounds\n    if (startTimeMinutes < startMinutes) {\n        startTimeMinutes = startMinutes;\n    }\n    if (startTimeMinutes + duration > endMinutes) {\n        startTimeMinutes = endMinutes - duration;\n    }\n    \n    // Format times\n    const startTimeStr = minutesToTime(startTimeMinutes);\n    const endTimeStr = minutesToTime(startTimeMinutes + duration);\n    \n    // Create the schedule\n    return {\n        date: dateStr,\n        weekday: weekday,\n        working_hours: workingHours,\n        schedule: [\n            {\n                todo_id: todo.id,\n                description: todo.description,\n                priority: todo.priority || \"medium\",\n                start_time: startTimeStr,\n                end_time: endTimeStr,\n                duration_minutes: duration\n            }\n        ],\n        total_tasks: 1,\n        total_scheduled_minutes: duration,\n        available_minutes: availableMinutes,\n        utilization_percentage: Math.round((duration / availableMinutes) * 100)\n    };\n}",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 990,
+        "y": 80,
+        "wires": [
+            [
+                "67f56759fa751ebf"
+            ]
+        ]
+    },
+    {
+        "id": "95fea1538f57d7e5",
+        "type": "inject",
+        "z": "e890cb64b583ae67",
+        "g": "a78b509a82385b19",
+        "name": "refresh",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "3600",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "0.5",
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 330,
+        "y": 60,
+        "wires": [
+            [
+                "5af0f9a96534bde4"
+            ]
+        ]
+    },
+    {
+        "id": "2303290e972f86e5",
+        "type": "complete",
+        "z": "e890cb64b583ae67",
+        "g": "a78b509a82385b19",
+        "name": "RefreshData",
+        "scope": [
+            "a25dd6b2b2f5f12e",
+            "5986f20dd192f3d1",
+            "1e85292a839d5575",
+            "154f2ad042c04c47"
+        ],
+        "uncaught": false,
+        "x": 340,
+        "y": 60,
+        "wires": [
+            [
+                "5af0f9a96534bde4"
+            ]
+        ]
+    },
+    {
+        "id": "c9be399814791e95",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "db5ccc8ce80d9597",
+        "name": "format-for-dashboard",
+        "func": "// Get all the todos\nconst todos = msg.payload || [];\n\n// Get active project filter from global context\nconst activeProjectFilter = global.get(\"projectFilter\") || \"all\";\n\n// Count priorities\nconst highPriority = todos.filter(todo => todo.priority === \"high\").length;\nconst mediumPriority = todos.filter(todo => todo.priority === \"medium\" || todo.priority === \"initial\").length;\nconst lowPriority = todos.filter(todo => todo.priority === \"low\").length;\n\n// Sort pending todos by priority and creation date\nconst priorityRank = { \"high\": 0, \"medium\": 1, \"low\": 2, \"initial\": 1 };\ntodos.sort((a, b) =>\n{\n    // First by priority\n    const priorityDiff = priorityRank[a.priority || \"medium\"] - priorityRank[b.priority || \"medium\"];\n    if (priorityDiff !== 0) return priorityDiff;\n\n    // Then by creation date (descending)\n    return (b.created_at || 0) - (a.created_at || 0);\n});\n\n// Store pending todos in global context for other nodes to use\nglobal.set(\"pendingTodos\", todos);\n\n// Get completed todos count (if available)\nconst completedTodos = global.get(\"completedTodos\") || [];\n\n// Format for dashboard\nconst dashboardData = {\n    todos: todos,\n    total_pending: todos.length,\n    total_completed: completedTodos.length,\n    high_priority: highPriority,\n    medium_priority: mediumPriority,\n    low_priority: lowPriority,\n    active_project_filter: activeProjectFilter,\n    last_updated: new Date().toISOString()\n};\n\n// Debug output\n// node.warn(\"Publishing todos to dashboard: \" + todos.length + \" todos\");\n// node.warn(\"Priorities - High: \" + highPriority + \", Medium: \" + mediumPriority + \", Low: \" + lowPriority);\n\n\nreturn {\n    payload: dashboardData,\n    topic: \"todo/dashboard/todos\"\n};\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1020,
+        "y": 280,
+        "wires": [
+            [
+                "c714b17a4d69317e"
+            ]
+        ]
+    },
+    {
+        "id": "a6db9f1e0da9ef65",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "7aede22112869fce",
+        "name": "pattern-analysis",
+        "func": "// Get completed todos from MongoDB\nconst completedTodos = msg.payload || [];\n\n// Store in global context for other nodes to use\nglobal.set(\"completedTodos\", completedTodos);\n\n// Sort completed todos by completion date (descending)\ncompletedTodos.sort((a, b) => (b.completed_at || 0) - (a.completed_at || 0));\n\n// Limit to most recent for dashboard\nconst recentCompleted = completedTodos.slice(0, 5);\n\n// Find patterns in similar tasks (simplified implementation)\nfunction findPatterns(todos) {\n    const patterns = [];\n    \n    // Group by words in description\n    const taskGroups = {};\n    \n    todos.forEach(todo => {\n        const words = todo.description.toLowerCase().split(/\\s+/).filter(w => w.length > 4);\n        \n        words.forEach(word => {\n            if (!taskGroups[word]) {\n                taskGroups[word] = [];\n            }\n            \n            // Only add if not already in the group\n            if (!taskGroups[word].find(t => t.id === todo.id)) {\n                taskGroups[word].push(todo);\n            }\n        });\n    });\n    \n    // Find patterns with at least 2 todos\n    Object.keys(taskGroups).forEach(word => {\n        if (taskGroups[word].length >= 2) {\n            patterns.push({\n                pattern_id: `pattern-${patterns.length + 1}`,\n                keyword: word,\n                similar_tasks: taskGroups[word].length,\n                template: `${word} task`,\n                automation_confidence: Math.round(60 + (taskGroups[word].length * 5)),\n                examples: taskGroups[word].slice(0, 3).map(t => t.description)\n            });\n        }\n    });\n    \n    return patterns.slice(0, 3); // Return top 3 patterns\n}\n\n// Generate simple recommendations\nfunction generateRecommendations(todos) {\n    const recommendations = [];\n    \n    // Find pending todos similar to completed todos\n    const pendingTodos = global.get(\"pendingTodos\") || [];\n    \n    // For demo, just recommend high priority for first few todos\n    pendingTodos.slice(0, 2).forEach(todo => {\n        if (todo.priority !== \"high\") {\n            recommendations.push({\n                todo_id: todo.id,\n                description: todo.description,\n                current_priority: todo.priority || \"medium\",\n                recommended_priority: \"high\",\n                confidence: Math.round(70 + Math.random() * 20)\n            });\n        }\n    });\n    \n    return recommendations;\n}\n\n// Format AI suggestions for dashboard\nconst aiSuggestions = {\n    automation_suggestions: findPatterns(completedTodos),\n    priority_recommendations: generateRecommendations(completedTodos),\n    pattern_analysis: {\n        total_patterns: completedTodos.length > 0 ? Math.min(3, Math.floor(completedTodos.length / 2)) : 0,\n        analyzed_todos: completedTodos.length\n    },\n    completed: recentCompleted\n};\n\n// Debug output\nnode.warn(\"Publishing AI suggestions with \" + aiSuggestions.automation_suggestions.length + \" automation suggestions\");\nnode.warn(\"Publishing \" + aiSuggestions.priority_recommendations.length + \" priority recommendations\");\nnode.warn(\"Including \" + recentCompleted.length + \" recently completed todos\");\n\nreturn { \n    payload: aiSuggestions,\n    topic: \"todo/dashboard/suggestions\"\n};",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1010,
+        "y": 180,
+        "wires": [
+            [
+                "fea965811933e941"
+            ]
+        ]
+    },
+    {
+        "id": "4ba8ed04634ace50",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "cbb2d887d9760353",
+        "name": "process-edit",
+        "func": "// Check if we found a todo\nif (!msg.payload || msg.payload.length === 0)\n{\n    // Add more detailed error info\n    const errorInfo = {\n        status: \"error\",\n        message: \"Todo not found\",\n        payload_type: typeof msg.payload,\n        payload_preview: msg.payload ? JSON.stringify(msg.payload).substring(0, 100) : \"null\"\n    };\n\n    return {\n        payload: errorInfo,\n        topic: \"todo/dashboard/editor\"\n    };\n}\n\n// Get the first todo from the results\nconst todo = Array.isArray(msg.payload) ? msg.payload[0] : msg.payload;\n\n// Handle MongoDB4 node returning different formats\nlet processedTodo = todo;\nif (todo.result && Array.isArray(todo.result))\n{\n    processedTodo = todo.result[0];\n} else if (todo.value)\n{\n    // MongoDB updateOne returnNewDocument response format\n    processedTodo = todo.value;\n}\n\n// Check if this is a direct edit request from the \"Copy ID\" button\n// In that case, avoid refreshing the todo list\nconst noRefresh = msg.noRefresh === true;\nconst directEdit = msg.directEdit === true;\n\n// Debug information\nnode.warn(\"Processing edit request: noRefresh=\" + noRefresh + \", directEdit=\" + directEdit);\n\n// Return the todo to send to the editor\nlet result = {\n    payload: processedTodo,\n    topic: \"todo/dashboard/editor\",\n    // Pass along the flags\n    noRefresh: noRefresh,\n    directEdit: directEdit\n};\n\nreturn result;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 420,
+        "wires": [
+            [
+                "1e85292a839d5575"
+            ]
+        ]
+    },
+    {
+        "id": "154f2ad042c04c47",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "name": "update-response",
+        "func": "// Function to handle responses after MongoDB update operations\n// This is used to format and send responses back to the Todo Editor UI\n\n// Get the MongoDB operation result\nconst mongoResult = msg.payload;\nconst topic = msg.topic || '';\n\n// Log the MongoDB result\nnode.warn(\"Processing update response for operation: \" + topic);\nnode.warn(\"MongoDB result: \" + JSON.stringify(mongoResult));\n\n// Check if it's a response to a todo update\nif (!topic.startsWith('todo/action/')) {\n    // Not a todo action, pass through\n    return msg;\n}\n\n// Extract the action from topic\nconst action = topic.replace('todo/action/', '');\n\n// Handle different actions\nswitch (action) {\n    case 'update':\n    case 'update_multiple':\n        // Handle update responses - support both old and new MongoDB response formats\n        if (\n            // Old format\n            (mongoResult && mongoResult.result && mongoResult.result.ok === 1) ||\n            // New format (mongodb4)\n            (mongoResult && mongoResult.acknowledged === true)\n        ) {\n            // Update was successful\n            // Extract counts from either format\n            const modifiedCount = mongoResult.modifiedCount ||\n                (mongoResult.result && mongoResult.result.nModified) || 0;\n            const matchedCount = mongoResult.matchedCount ||\n                (mongoResult.result && mongoResult.result.n) || 0;\n\n            return {\n                topic: 'todo/dashboard/editor',\n                payload: {\n                    status: 'success',\n                    message: 'Todo updated successfully',\n                    action: action,\n                    modified_count: modifiedCount,\n                    matched_count: matchedCount\n                }\n            };\n        } else {\n            // Update failed or returned unexpected result\n            return {\n                topic: 'todo/dashboard/editor',\n                payload: {\n                    status: 'error',\n                    message: 'Failed to update todo',\n                    action: action,\n                    error: JSON.stringify(mongoResult)\n                }\n            };\n        }\n\n    case 'delete':\n        // Handle delete responses - support both old and new MongoDB response formats\n        if (\n            // Old format\n            (mongoResult && mongoResult.result && mongoResult.result.ok === 1) ||\n            // New format (mongodb4)\n            (mongoResult && mongoResult.acknowledged === true)\n        ) {\n            // Delete was successful\n            const deletedCount = mongoResult.deletedCount ||\n                (mongoResult.result && mongoResult.result.n) || 0;\n\n            return {\n                topic: 'todo/dashboard/editor',\n                payload: {\n                    status: 'success',\n                    message: 'Todo deleted successfully',\n                    action: action,\n                    deleted_count: deletedCount\n                }\n            };\n        } else {\n            // Delete failed or returned unexpected result\n            return {\n                topic: 'todo/dashboard/editor',\n                payload: {\n                    status: 'error',\n                    message: 'Failed to delete todo',\n                    action: action,\n                    error: JSON.stringify(mongoResult)\n                }\n            };\n        }\n\n    case 'complete':\n        // Handle complete responses - support both old and new MongoDB response formats\n        if (\n            // Old format\n            (mongoResult && mongoResult.result && mongoResult.result.ok === 1) ||\n            // New format (mongodb4)\n            (mongoResult && mongoResult.acknowledged === true)\n        ) {\n            // Complete was successful\n            const modifiedCount = mongoResult.modifiedCount ||\n                (mongoResult.result && mongoResult.result.nModified) || 0;\n\n            return {\n                topic: 'todo/dashboard/editor',\n                payload: {\n                    status: 'success',\n                    message: 'Todo marked as completed',\n                    action: action,\n                    modified_count: modifiedCount\n                }\n            };\n        } else {\n            // Complete failed or returned unexpected result\n            return {\n                topic: 'todo/dashboard/editor',\n                payload: {\n                    status: 'error',\n                    message: 'Failed to mark todo as completed',\n                    action: action,\n                    error: JSON.stringify(mongoResult)\n                }\n            };\n        }\n\n    case 'review':\n        // Handle review responses - support both old and new MongoDB response formats\n        if (\n            // Old format\n            (mongoResult && mongoResult.result && mongoResult.result.ok === 1) ||\n            // New format (mongodb4)\n            (mongoResult && mongoResult.acknowledged === true)\n        ) {\n            // Review was successful\n            const modifiedCount = mongoResult.modifiedCount ||\n                (mongoResult.result && mongoResult.result.nModified) || 0;\n\n            return {\n                topic: 'todo/dashboard/editor',\n                payload: {\n                    status: 'success',\n                    message: 'Todo marked for review',\n                    action: action,\n                    modified_count: modifiedCount\n                }\n            };\n        } else {\n            // Review failed or returned unexpected result\n            return {\n                topic: 'todo/dashboard/editor',\n                payload: {\n                    status: 'error',\n                    message: 'Failed to mark todo for review',\n                    action: action,\n                    error: JSON.stringify(mongoResult)\n                }\n            };\n        }\n\n    default:\n        // Unknown action, pass through\n        return msg;\n}\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1060,
+        "y": 600,
+        "wires": [
+            [
+                "7c064436f034e61c"
+            ]
+        ]
+    },
+    {
+        "id": "67f56759fa751ebf",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "9fa5827908a49dc4",
+        "name": "dashboard-pub",
+        "mode": "link",
+        "links": [
+            "8d670b8299f89a5b",
+            "9348ae0a3e0c29ad"
+        ],
+        "x": 1095,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "c714b17a4d69317e",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "db5ccc8ce80d9597",
+        "name": "dashboard-pub",
+        "mode": "link",
+        "links": [
+            "8d670b8299f89a5b",
+            "9348ae0a3e0c29ad"
+        ],
+        "x": 1155,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "fea965811933e941",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "7aede22112869fce",
+        "name": "dashboard-pub",
+        "mode": "link",
+        "links": [
+            "8d670b8299f89a5b",
+            "9348ae0a3e0c29ad"
+        ],
+        "x": 1125,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "1e85292a839d5575",
+        "type": "switch",
+        "z": "e890cb64b583ae67",
+        "g": "cbb2d887d9760353",
+        "name": "Direct Edit Handler",
+        "property": "directEdit",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 990,
+        "y": 420,
+        "wires": [
+            [
+                "f1357f1ec38dd4c9"
+            ],
+            [
+                "6822c3f04ab49643"
+            ]
+        ]
+    },
+    {
+        "id": "7c064436f034e61c",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "3ab338a0bdb8a589",
+        "name": "dashboard-pub",
+        "mode": "link",
+        "links": [
+            "8d670b8299f89a5b",
+            "9348ae0a3e0c29ad"
+        ],
+        "x": 1195,
+        "y": 600,
+        "wires": []
+    },
+    {
+        "id": "f1357f1ec38dd4c9",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "cbb2d887d9760353",
+        "name": "editor-only-pub",
+        "mode": "link",
+        "links": [
+            "31514c435b15540f"
+        ],
+        "x": 1095,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "6822c3f04ab49643",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "cbb2d887d9760353",
+        "name": "dashboard-pub",
+        "mode": "link",
+        "links": [
+            "8d670b8299f89a5b",
+            "9348ae0a3e0c29ad"
+        ],
+        "x": 1095,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "1cdab81a6028b016",
+        "type": "mongodb4-client",
+        "name": "swarmonomicon",
+        "protocol": "mongodb",
+        "hostname": "127.0.0.1",
+        "port": "",
+        "dbName": "swarmonomicon",
+        "appName": "",
+        "authSource": "",
+        "authMechanism": "DEFAULT",
+        "tls": false,
+        "tlsCAFile": "",
+        "tlsCertificateKeyFile": "",
+        "tlsInsecure": false,
+        "connectTimeoutMS": "30000",
+        "socketTimeoutMS": "0",
+        "minPoolSize": "0",
+        "maxPoolSize": "100",
+        "maxIdleTimeMS": "0",
+        "uri": "",
+        "advanced": "{}",
+        "uriTabActive": "tab-uri-simple"
+    }
+]

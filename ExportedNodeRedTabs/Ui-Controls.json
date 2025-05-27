@@ -1,0 +1,438 @@
+[
+    {
+        "id": "91c9dd4bf96e77d7",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "Central Filter",
+        "func": "// This function serves as a central handler for all filter changes\n// and ensures the todo list is refreshed when any filter is changed\n\n// Get the current topic and payload\nconst topic = msg.topic || \"\";\nconst payload = msg.payload || {};\n\n// Handle different filter types based on the topic\nif (topic.includes(\"filter_project\")) {\n    // Handle project filter updates\n    const project = payload.project || \"all\";\n    global.set(\"projectFilter\", project);\n    node.warn(\"Project filter set to: \" + project);\n}\nelse if (topic.includes(\"filter_status\")) {\n    // Handle status filter updates\n    const status = payload.status || \"all\";\n    global.set(\"statusFilter\", status);\n    node.warn(\"Status filter set to: \" + status);\n}\nelse if (topic.includes(\"filter_priority\")) {\n    // Handle priority filter updates\n    const priority = payload.priority || \"all\";\n    global.set(\"priorityFilter\", priority);\n    node.warn(\"Priority filter set to: \" + priority);\n}\nelse if (topic.includes(\"filter_date\")) {\n    // Handle date filter updates\n    const date = payload.date || null;\n    global.set(\"dateFilter\", date);\n    node.warn(\"Date filter set to: \" + (date ? new Date(date).toISOString().split('T')[0] : \"none\"));\n}\nelse if (topic.includes(\"clear_filters\")) {\n    // Handle clearing all filters\n    global.set(\"projectFilter\", \"all\");\n    global.set(\"statusFilter\", \"all\");\n    global.set(\"priorityFilter\", \"all\");\n    global.set(\"dateFilter\", null);\n    node.warn(\"All filters cleared\");\n}\n\n// Publish a status update\nconst activeFilters = [];\nif (global.get(\"projectFilter\") !== \"all\") activeFilters.push(\"Project: \" + global.get(\"projectFilter\"));\nif (global.get(\"statusFilter\") !== \"all\") activeFilters.push(\"Status: \" + global.get(\"statusFilter\"));\nif (global.get(\"priorityFilter\") !== \"all\") activeFilters.push(\"Priority: \" + global.get(\"priorityFilter\"));\nif (global.get(\"dateFilter\")) activeFilters.push(\"Date: \" + new Date(global.get(\"dateFilter\")).toLocaleDateString());\n\n// Create a status message\nlet statusMsg = { payload: activeFilters.length > 0 ? \n    \"Filtered by \" + activeFilters.join(\", \") : \n    \"Showing all items\" };\n\n// Return messages\nreturn [\n    // Output 1: Message to trigger todo list refresh\n    {\n        topic: \"todo/action/refresh_todos\",\n        payload: {\n            refreshType: \"filter_change\",\n            filters: {\n                project: global.get(\"projectFilter\"),\n                status: global.get(\"statusFilter\"),\n                priority: global.get(\"priorityFilter\"),\n                date: global.get(\"dateFilter\")\n            }\n        }\n    },\n    // Output 2: Status update for display\n    statusMsg\n];",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2130,
+        "y": 600,
+        "wires": [
+            [
+                "21670d9ec4b93356"
+            ],
+            [
+                "af49098fc8fec1b0"
+            ]
+        ]
+    },
+    {
+        "id": "e5802fb8bb1f5382",
+        "type": "ui_button",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "Refresh Todos",
+        "group": "g-todos",
+        "order": 13,
+        "width": 4,
+        "height": 1,
+        "passthru": false,
+        "label": "Refresh List",
+        "tooltip": "Refresh the Todo List items",
+        "color": "#fff85e",
+        "bgcolor": "#4caf50",
+        "className": "",
+        "icon": "refresh",
+        "payload": "1",
+        "payloadType": "str",
+        "topic": "todo/action/refresh_todos",
+        "topicType": "str",
+        "x": 1760,
+        "y": 500,
+        "wires": [
+            [
+                "63b6d78efd2d69ed"
+            ]
+        ]
+    },
+    {
+        "id": "63b6d78efd2d69ed",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "action-pub",
+        "mode": "link",
+        "links": [
+            "af45aadd044350e0",
+            "b9cdbb33dfe0a2cd"
+        ],
+        "x": 1895,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "9e852016adc42f2c",
+        "type": "ui_button",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "Create Todo",
+        "group": "g-todos",
+        "order": 16,
+        "width": 4,
+        "height": 1,
+        "passthru": false,
+        "label": "New Todo",
+        "tooltip": "Create a new Todo item",
+        "color": "#ffffff",
+        "bgcolor": "#673ab7",
+        "className": "",
+        "icon": "fa-plus-circle",
+        "payload": "new",
+        "payloadType": "str",
+        "topic": "todo/action/create",
+        "topicType": "str",
+        "x": 1750,
+        "y": 460,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "8a9417e81c6e8a97",
+        "type": "ui_button",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "Show All",
+        "group": "g-todos",
+        "order": 18,
+        "width": 4,
+        "height": 1,
+        "passthru": false,
+        "label": "All Projects",
+        "tooltip": "Show todos from all projects",
+        "color": "#fff85e",
+        "bgcolor": "#1976d2",
+        "className": "",
+        "icon": "list",
+        "payload": "all",
+        "payloadType": "str",
+        "topic": "todo/action/filter_project",
+        "topicType": "str",
+        "x": 1780,
+        "y": 540,
+        "wires": [
+            [
+                "32cd8d01e43332f3"
+            ]
+        ]
+    },
+    {
+        "id": "9ea558fe7c273114",
+        "type": "ui_dropdown",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "ProjectSelect",
+        "label": "Filter by Project",
+        "tooltip": "Filter todos by project",
+        "place": "Select project or 'All'",
+        "group": "g-todos",
+        "order": 17,
+        "width": 12,
+        "height": 1,
+        "passthru": true,
+        "multiple": false,
+        "options": [
+            {
+                "label": "All Projects",
+                "value": "all",
+                "type": "str"
+            },
+            {
+                "label": "regressiontestkit",
+                "value": "regressiontestkit",
+                "type": "str"
+            },
+            {
+                "label": "madness_interactive",
+                "value": "madness_interactive",
+                "type": "str"
+            },
+            {
+                "label": "omnispindle",
+                "value": "omnispindle",
+                "type": "str"
+            },
+            {
+                "label": "swarmonomicon",
+                "value": "swarmonomicon",
+                "type": "str"
+            },
+            {
+                "label": "balena_device_management",
+                "value": "balena_device_management",
+                "type": "str"
+            },
+            {
+                "label": "cogwyrm",
+                "value": "cogwyrm",
+                "type": "str"
+            },
+            {
+                "label": "docker_implementation",
+                "value": "docker_implementation",
+                "type": "str"
+            },
+            {
+                "label": "documentation",
+                "value": "documentation",
+                "type": "str"
+            },
+            {
+                "label": "eventghost-rust",
+                "value": "eventghost-rust",
+                "type": "str"
+            },
+            {
+                "label": "fastmcp",
+                "value": "fastmcp",
+                "type": "str"
+            },
+            {
+                "label": "hammerghost",
+                "value": "hammerghost",
+                "type": "str"
+            },
+            {
+                "label": "hammerspoon",
+                "value": "hammerspoon",
+                "type": "str"
+            },
+            {
+                "label": "quality_assurance",
+                "value": "quality_assurance",
+                "type": "str"
+            },
+            {
+                "label": "spindlewrit",
+                "value": "spindlewrit",
+                "type": "str"
+            }
+        ],
+        "payload": "",
+        "topic": "topic",
+        "topicType": "msg",
+        "className": "",
+        "x": 1770,
+        "y": 580,
+        "wires": [
+            [
+                "32cd8d01e43332f3"
+            ]
+        ]
+    },
+    {
+        "id": "2fd455fef50050a9",
+        "type": "inject",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "Project Options Inject",
+        "props": [
+            {
+                "p": "options",
+                "v": "[\"All Projects\",\"regressiontestkit\",\"madness_interactive\",\"omnispindle\",\"swarmonomicon\",\"balena_device_management\",\"cogwyrm\",\"docker_implementation\",\"documentation\",\"eventghost-rust\",\"fastmcp\",\"hammerghost\",\"hammerspoon\",\"quality_assurance\",\"inventorium\",\"spindlewrit\"]",
+                "vt": "json"
+            },
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "project_options",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1560,
+        "y": 580,
+        "wires": [
+            [
+                "9ea558fe7c273114"
+            ]
+        ]
+    },
+    {
+        "id": "32cd8d01e43332f3",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "route-project-filter",
+        "func": "// Check if payload is a project name or 'all'\nlet projectFilter = 'all';\n\nif (msg.payload && msg.payload !== 'all') {\n    projectFilter = msg.payload;\n}\n\nreturn {\n    topic: 'todo/action/filter_project',\n    payload: {\n        project: projectFilter\n    }\n};",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1950,
+        "y": 560,
+        "wires": [
+            [
+                "91c9dd4bf96e77d7"
+            ]
+        ],
+        "icon": "font-awesome/fa-filter"
+    },
+    {
+        "id": "334f7f100e16ca49",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "route-date-filter",
+        "func": "// Process date filter selection\nconst dateValue = msg.payload;\n\nreturn {\n    topic: 'todo/action/filter_date',\n    payload: {\n        date: dateValue\n    }\n};",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1940,
+        "y": 600,
+        "wires": [
+            [
+                "91c9dd4bf96e77d7"
+            ]
+        ]
+    },
+    {
+        "id": "7536a291bec6ea6b",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "clear-all-filters",
+        "func": "// Clear all filters function replaced by central handler\nreturn {\n    topic: 'todo/action/clear_filters',\n    payload: {\n        clear_filters: true\n    }\n};",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1940,
+        "y": 640,
+        "wires": [
+            [
+                "91c9dd4bf96e77d7"
+            ]
+        ]
+    },
+    {
+        "id": "21670d9ec4b93356",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "action-pub",
+        "mode": "link",
+        "links": [
+            "af45aadd044350e0",
+            "b9cdbb33dfe0a2cd"
+        ],
+        "x": 2235,
+        "y": 580,
+        "wires": []
+    },
+    {
+        "id": "af49098fc8fec1b0",
+        "type": "ui_text",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "group": "g-todos",
+        "order": 9,
+        "width": 8,
+        "height": 2,
+        "name": "Sync Status",
+        "label": "Status:",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": "",
+        "color": "#000000",
+        "x": 2235,
+        "y": 620,
+        "wires": [],
+        "l": false
+    },
+    {
+        "id": "2bc85dd65afdc4eb",
+        "type": "ui_date_picker",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "Due Date Filter",
+        "label": "Due Date",
+        "group": "g-todos",
+        "order": 10,
+        "width": 8,
+        "height": 2,
+        "passthru": true,
+        "topic": "todo/filter/date",
+        "topicType": "str",
+        "className": "",
+        "x": 1760,
+        "y": 620,
+        "wires": [
+            [
+                "334f7f100e16ca49"
+            ]
+        ]
+    },
+    {
+        "id": "d1e3061449f916c5",
+        "type": "ui_button",
+        "z": "e890cb64b583ae67",
+        "g": "fa491c95f3f4ac79",
+        "name": "Clear Filters",
+        "group": "g-todos",
+        "order": 12,
+        "width": 4,
+        "height": 1,
+        "passthru": false,
+        "label": "Clear Filters",
+        "tooltip": "Reset all filters to default",
+        "color": "#fff85e",
+        "bgcolor": "#f44336",
+        "className": "",
+        "icon": "fa-filter-circle-xmark",
+        "payload": "clear",
+        "payloadType": "str",
+        "topic": "todo/action/clear_filters",
+        "topicType": "str",
+        "x": 1770,
+        "y": 660,
+        "wires": [
+            [
+                "7536a291bec6ea6b"
+            ]
+        ]
+    },
+    {
+        "id": "g-todos",
+        "type": "ui_group",
+        "name": "Todo List",
+        "tab": "t-dashboard",
+        "order": 1,
+        "disp": true,
+        "width": 16,
+        "collapse": false
+    },
+    {
+        "id": "t-dashboard",
+        "type": "ui_tab",
+        "name": "Omnispindle",
+        "icon": "dashboard",
+        "order": 8,
+        "disabled": false,
+        "hidden": false
+    }
+]

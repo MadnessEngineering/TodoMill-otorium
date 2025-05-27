@@ -1,0 +1,147 @@
+[
+    {
+        "id": "4961f6851fd807b2",
+        "type": "group",
+        "z": "4627b9154935be55",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "87850d7ef7a2fa54",
+            "6f3d3419053a9380",
+            "98765a4b3c2d1e0f",
+            "f12e345ab678c901",
+            "a8ccfbb12bb2204f",
+            "a435d90b1b37ab01"
+        ],
+        "x": 181,
+        "y": 1930.000165939331,
+        "w": 772,
+        "h": 162
+    },
+    {
+        "id": "87850d7ef7a2fa54",
+        "type": "exec",
+        "z": "4627b9154935be55",
+        "g": "4961f6851fd807b2",
+        "command": "",
+        "addpay": "payload",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "60",
+        "winHide": false,
+        "oldrc": false,
+        "name": "execute mosquitto_sub",
+        "x": 597,
+        "y": 1991.000165939331,
+        "wires": [
+            [
+                "98765a4b3c2d1e0f",
+                "a8ccfbb12bb2204f"
+            ],
+            [
+                "98765a4b3c2d1e0f",
+                "a8ccfbb12bb2204f"
+            ],
+            [
+                "f12e345ab678c901"
+            ]
+        ]
+    },
+    {
+        "id": "6f3d3419053a9380",
+        "type": "function",
+        "z": "4627b9154935be55",
+        "g": "4961f6851fd807b2",
+        "name": "prepare mosquitto_sub command",
+        "func": "// Extract topic from query params and set default timeout\nconst topic = msg.req.query.topic || 'test';\nconst timeout = parseInt(msg.req.query.timeout || 6000);\nconst host = msg.req.query.host || 'localhost';\nconst port = msg.req.query.port || '4140';\n\n// Build the mosquitto_sub command\n// -C 1: exit after receiving a single message\n// -W timeout_ms: set timeout in milliseconds\n// -h host: MQTT broker host\n// -p port: MQTT broker port\n// -t topic: topic to subscribe to\nmsg.payload = `mosquitto_sub -C 1 -W ${timeout} -h ${host} -p ${port} -t \"${topic}\"`;\n\n// Store original request info for response handling\nmsg.originalTopic = topic;\nmsg.originalTimeout = timeout;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 407,
+        "y": 2051.000165939331,
+        "wires": [
+            [
+                "87850d7ef7a2fa54"
+            ]
+        ]
+    },
+    {
+        "id": "98765a4b3c2d1e0f",
+        "type": "http response",
+        "z": "4627b9154935be55",
+        "g": "4961f6851fd807b2",
+        "name": "send http response",
+        "statusCode": "200",
+        "headers": {
+            "content-type": "application/json"
+        },
+        "x": 837,
+        "y": 1971.000165939331,
+        "wires": []
+    },
+    {
+        "id": "f12e345ab678c901",
+        "type": "function",
+        "z": "4627b9154935be55",
+        "g": "4961f6851fd807b2",
+        "name": "handle errors",
+        "func": "// This handles stderr output from exec\n// Convert to error response\nreturn {\n    payload: {\n        error: \"Error executing MQTT subscription\",\n        details: msg.payload,\n        topic: msg.originalTopic\n    },\n    statusCode: 500\n};",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 677,
+        "y": 2031.000165939331,
+        "wires": [
+            [
+                "a8ccfbb12bb2204f"
+            ]
+        ]
+    },
+    {
+        "id": "a8ccfbb12bb2204f",
+        "type": "debug",
+        "z": "4627b9154935be55",
+        "g": "4961f6851fd807b2",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 827,
+        "y": 2031.000165939331,
+        "wires": []
+    },
+    {
+        "id": "a435d90b1b37ab01",
+        "type": "http in",
+        "z": "4627b9154935be55",
+        "g": "4961f6851fd807b2",
+        "name": "[get] /mqtt/subscribe",
+        "url": "/mqtt/subscribe",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 307,
+        "y": 1991.000165939331,
+        "wires": [
+            [
+                "6f3d3419053a9380"
+            ]
+        ]
+    }
+]

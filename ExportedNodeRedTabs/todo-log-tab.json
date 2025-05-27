@@ -1,0 +1,268 @@
+[
+    {
+        "id": "7924b3da6c8fcf17",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "2ff18052d788c794",
+        "name": "Query TodoLogService API",
+        "func": "// This function handles requests for todo logs from the UI\n// It calls the Omnispindle API to get logs instead of querying MongoDB directly\n\n// Debug function to help troubleshoot\nfunction debugObject(obj, prefix = '') {\n    if (!obj) return 'null';\n    if (typeof obj === 'object') {\n        return prefix + JSON.stringify(obj, null, 2);\n    }\n    return prefix + obj;\n}\n\nif (msg.payload && msg.payload.action === 'get_logs') {\n    // Extract request parameters\n    const page = msg.payload.page || 1;\n    const pageSize = msg.payload.pageSize || 20;\n    const filter = msg.payload.filter || 'all';\n    const project = msg.payload.project || 'all';\n    const append = msg.payload.append || false;\n\n    // Try direct MongoDB query as a fallback\n    // This is more reliable when running on the same machine as MongoDB\n    const collection = 'todo_logs';\n    const mongoQuery = {};\n    \n    // Apply operation filter if specified\n    if (filter !== 'all') {\n        mongoQuery.operation = filter;\n    }\n    \n    // Apply project filter if specified\n    if (project !== 'all') {\n        mongoQuery.project = project;\n    }\n    \n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Querying MongoDB directly\" });\n    node.warn(\"Querying MongoDB collection: \" + collection);\n    \n    // Create MongoDB query message\n    return [{\n        topic: 'todo/log/mongodb_query',\n        collection: collection,\n        operation: 'find',\n        payload: mongoQuery,\n        limit: pageSize,\n        skip: (page - 1) * pageSize,\n        sort: { timestamp: -1 },\n        projection: {},\n        append: append\n    }];\n}\n\n// If it's a response from MongoDB\nif (msg.topic === 'todo/log/mongodb_response' || \n    (msg.collection === 'todo_logs' && Array.isArray(msg.payload))) {\n    try {\n        const logEntries = msg.payload;\n        const append = msg.append || false;\n        \n        // Debug information\n        node.status({ fill: \"green\", shape: \"dot\", text: \"Found \" + logEntries.length + \" log entries\" });\n        node.warn(\"MongoDB query returned \" + logEntries.length + \" results\");\n        \n        // Get unique projects for filtering\n        const projects = [...new Set(logEntries.map(entry => entry.project).filter(Boolean))];\n        \n        // Format the MongoDB response for the dashboard\n        return [{\n            topic: 'todo/log/response',\n            payload: {\n                logEntries: logEntries,\n                totalCount: logEntries.length,  // This is an approximation\n                page: msg.skip ? (msg.skip / msg.limit) + 1 : 1,\n                pageSize: msg.limit || 20,\n                hasMore: logEntries.length >= (msg.limit || 20),  // Approximation\n                projects: projects,\n                append: append\n            }\n        }];\n    } catch (err) {\n        // Error parsing the response\n        node.error(\"Exception processing MongoDB response: \" + err.message);\n        return [{\n            topic: 'todo/log/response',\n            payload: {\n                error: 'Error processing MongoDB response: ' + err.message,\n                logEntries: [],\n                debug: debugObject(msg.payload)\n            }\n        }];\n    }\n}\n\n// If it's a response from the API, format it for the UI\nif (msg.topic === 'todo/log/api_response' || msg.statusCode) {\n    try {\n        const response = msg.payload;\n        const append = msg.append || false;\n\n        // Debug information\n        node.status({ fill: \"blue\", shape: \"dot\", text: \"Received API response\" });\n\n        // Accept any response format that contains log entries\n        // This makes the code more flexible with different API response structures\n        let logEntries = [];\n        let totalCount = 0;\n        let page = 1;\n        let pageSize = 20;\n        let hasMore = false;\n        let projects = [];\n\n        // Try to extract data from various possible response formats\n        if (response.data && response.data.logs) {\n            // Format 1: {data: {logs: [...], ...}}\n            logEntries = response.data.logs;\n            totalCount = response.data.totalCount || response.data.count || logEntries.length;\n            page = response.data.page || 1;\n            pageSize = response.data.pageSize || 20;\n            hasMore = response.data.hasMore || false;\n            projects = response.data.projects || [];\n        } else if (response.data && response.data.logEntries) {\n            // Format 2: {data: {logEntries: [...], ...}}\n            logEntries = response.data.logEntries;\n            totalCount = response.data.totalCount || response.data.count || logEntries.length;\n            page = response.data.page || 1;\n            pageSize = response.data.pageSize || 20;\n            hasMore = response.data.hasMore || false;\n            projects = response.data.projects || [];\n        } else if (response.logs) {\n            // Format 3: {logs: [...], ...}\n            logEntries = response.logs;\n            totalCount = response.totalCount || response.count || logEntries.length;\n            page = response.page || 1;\n            pageSize = response.pageSize || 20;\n            hasMore = response.hasMore || false;\n            projects = response.projects || [];\n        } else if (response.logEntries) {\n            // Format 4: {logEntries: [...], ...}\n            logEntries = response.logEntries;\n            totalCount = response.totalCount || response.count || logEntries.length;\n            page = response.page || 1;\n            pageSize = response.pageSize || 20;\n            hasMore = response.hasMore || false;\n            projects = response.projects || [];\n        } else if (Array.isArray(response)) {\n            // Format 5: Direct array of logs\n            logEntries = response;\n            totalCount = logEntries.length;\n            hasMore = false;\n        } else if (response.items && Array.isArray(response.items)) {\n            // Format 6: {items: [...], count: X}\n            logEntries = response.items;\n            totalCount = response.count || logEntries.length;\n            hasMore = logEntries.length < totalCount;\n        }\n\n        // Format the response for the dashboard\n        return [{\n            topic: 'todo/log/response',\n            payload: {\n                logEntries: logEntries,\n                totalCount: totalCount,\n                page: page,\n                pageSize: pageSize,\n                hasMore: hasMore,\n                projects: projects,\n                append: append\n            }\n        }];\n    } catch (err) {\n        // Error parsing the response\n        node.error(\"Exception processing API response: \" + err.message + \"\\nPayload: \" + debugObject(msg.payload));\n        return [{\n            topic: 'todo/log/response',\n            payload: {\n                error: 'Error processing API response: ' + err.message,\n                logEntries: [],\n                debug: debugObject(msg.payload)\n            }\n        }];\n    }\n}\n\n// Initial data load - trigger an API request automatically on startup\n// This ensures logs are loaded without waiting for user interaction\nif (msg.topic === 'startup') {\n    return [{\n        topic: 'todo/log/request',\n        payload: {\n            action: 'get_logs',\n            page: 1,\n            pageSize: 20,\n            filter: 'all',\n            project: 'all'\n        }\n    }];\n}\n\n// Pass through other messages\nreturn null; \n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "// Initialize settings\nnode.status({fill:\"green\", shape:\"dot\", text:\"Ready to query todo logs\"});\n\n// Trigger initial data load\nsetTimeout(function() {\n    node.send({\n        topic: 'startup',\n        payload: {}\n    });\n}, 1500);",
+        "finalize": "",
+        "libs": [],
+        "x": 723.0000152587891,
+        "y": 1777.000023841858,
+        "wires": [
+            [
+                "c592d993a8632904"
+            ]
+        ]
+    },
+    {
+        "id": "747961116aa3f32c",
+        "type": "switch",
+        "z": "e890cb64b583ae67",
+        "g": "b00e1184cd8b1e60",
+        "name": "Route Log Messages",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "todo/log/new_entry",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/log/response",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/log/request",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/log/api_request",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "todo/log/mongodb_query",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "startup",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 6,
+        "x": 400,
+        "y": 1620,
+        "wires": [
+            [
+                "61895d493b9f923c"
+            ],
+            [
+                "61895d493b9f923c"
+            ],
+            [
+                "7924b3da6c8fcf17"
+            ],
+            [],
+            [
+                "7924b3da6c8fcf17"
+            ],
+            [
+                "7924b3da6c8fcf17"
+            ]
+        ]
+    },
+    {
+        "id": "c592d993a8632904",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "2ff18052d788c794",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "todo_log",
+        "operation": "",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "MongoDB Query",
+        "x": 953.0000152587891,
+        "y": 1777.000023841858,
+        "wires": [
+            [
+                "e880dcb008ea23b1"
+            ]
+        ]
+    },
+    {
+        "id": "3cbf884ecef064d0",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "b00e1184cd8b1e60",
+        "name": "Process Log Message",
+        "func": "// Process incoming log messages\n// This function now processes messages either from the API or direct calls\n\n// If the message already has a topic set for routing, preserve it\nif (msg.topic && (msg.topic.startsWith('todo/log/') || msg.topic === 'startup')) {\n    // Keep the existing topic\n    // This ensures API messages keep their original routing\n    return msg;\n}\n\n// For messages without a specific topic (like direct log entries)\nif (msg.payload) {\n    // Set the topic for routing to display in UI\n    msg.topic = \"todo/log/new_entry\";\n\n    // The payload could be from API or MQTT\n    // Make sure timestamp is properly parsed\n    if (typeof msg.payload.timestamp === 'string') {\n        // Create a Date object from the ISO string\n        const timestamp = new Date(msg.payload.timestamp);\n        msg.payload.timestamp = timestamp;\n    }\n\n    return msg;\n} else {\n    return null;\n} \n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 260,
+        "y": 1500,
+        "wires": [
+            [
+                "747961116aa3f32c"
+            ]
+        ]
+    },
+    {
+        "id": "61895d493b9f923c",
+        "type": "ui_template",
+        "z": "e890cb64b583ae67",
+        "g": "d8ac93aea5cc3164",
+        "group": "g-todo-logs",
+        "name": "Todo Log Template",
+        "order": 1,
+        "width": "0",
+        "height": "0",
+        "format": "<!-- Todo Log Panel for FastMCP Todo Server Dashboard -->\n\n<style>\n    .log-container {\n        font-family: 'Roboto', sans-serif;\n        padding: 0 10px;\n    }\n\n    .log-header {\n        background-color: #f5f5f5;\n        border-radius: 8px;\n        padding: 15px;\n        margin-bottom: 20px;\n        display: flex;\n        flex-wrap: wrap;\n        justify-content: space-between;\n        align-items: center;\n    }\n\n    .log-title {\n        font-size: 24px;\n        font-weight: 500;\n        color: #212121;\n    }\n\n    .log-stats {\n        display: flex;\n        flex-wrap: wrap;\n        gap: 15px;\n    }\n\n    .stats-item {\n        padding: 8px 12px;\n        border-radius: 4px;\n        background-color: #e0e0e0;\n        font-size: 14px;\n        color: #424242;\n    }\n\n    .stats-item.update {\n        background-color: #e3f2fd;\n        color: #1565c0;\n    }\n\n    .stats-item.create {\n        background-color: #e8f5e9;\n        color: #2e7d32;\n    }\n\n    .stats-item.delete {\n        background-color: #ffebee;\n        color: #c62828;\n    }\n\n    .stats-item.complete {\n        background-color: #e8f5e9;\n        color: #2e7d32;\n    }\n\n    .log-filters {\n        margin-bottom: 20px;\n        display: flex;\n        gap: 10px;\n        flex-wrap: wrap;\n    }\n\n    .filter-button {\n        padding: 6px 12px;\n        border-radius: 16px;\n        border: 1px solid #e0e0e0;\n        background-color: white;\n        font-size: 13px;\n        cursor: pointer;\n        transition: all 0.2s;\n    }\n\n    .filter-button:hover {\n        background-color: #f5f5f5;\n    }\n\n    .filter-button.active {\n        background-color: #e3f2fd;\n        border-color: #90caf9;\n        color: #1976d2;\n    }\n\n    .log-list {\n        margin-bottom: 20px;\n    }\n\n    .log-card {\n        margin-bottom: 15px;\n        padding: 15px;\n        border-radius: 8px;\n        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);\n        background-color: white;\n        transition: all 0.3s ease;\n        border-left: 6px solid #bdbdbd;\n    }\n\n    .log-card:hover {\n        transform: translateY(-2px);\n        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);\n    }\n\n    .log-card.update {\n        border-left-color: #2196f3;\n    }\n\n    .log-card.create {\n        border-left-color: #4caf50;\n    }\n\n    .log-card.delete {\n        border-left-color: #f44336;\n    }\n\n    .log-card.complete {\n        border-left-color: #4caf50;\n    }\n\n    .log-header-row {\n        display: flex;\n        justify-content: space-between;\n        align-items: flex-start;\n        margin-bottom: 10px;\n    }\n\n    .log-type {\n        font-size: 12px;\n        text-transform: uppercase;\n        padding: 2px 8px;\n        border-radius: 12px;\n        font-weight: 500;\n        flex-shrink: 0;\n    }\n\n    .log-type.update {\n        background-color: #e3f2fd;\n        color: #1565c0;\n    }\n\n    .log-type.create {\n        background-color: #e8f5e9;\n        color: #2e7d32;\n    }\n\n    .log-type.delete {\n        background-color: #ffebee;\n        color: #c62828;\n    }\n\n    .log-type.complete {\n        background-color: #e8f5e9;\n        color: #2e7d32;\n    }\n\n    .log-timestamp {\n        color: #757575;\n        font-size: 13px;\n    }\n\n    .log-title {\n        font-weight: 500;\n        font-size: 16px;\n        color: #212121;\n        margin: 10px 0;\n    }\n\n    .log-project {\n        display: inline-block;\n        padding: 2px 8px;\n        border-radius: 12px;\n        background-color: #f5f5f5;\n        color: #616161;\n        font-size: 12px;\n        margin-right: 8px;\n    }\n\n    .log-changes {\n        margin-top: 10px;\n        font-size: 14px;\n        color: #424242;\n    }\n\n    .change-item {\n        margin-bottom: 5px;\n        padding-left: 15px;\n        position: relative;\n    }\n\n    .change-item::before {\n        content: '•';\n        position: absolute;\n        left: 0;\n        color: #9e9e9e;\n    }\n\n    .field-name {\n        font-weight: 500;\n        margin-right: 5px;\n    }\n\n    .previous-value {\n        text-decoration: line-through;\n        color: #f44336;\n        margin-right: 5px;\n    }\n\n    .new-value {\n        color: #4caf50;\n    }\n\n    .no-logs {\n        padding: 20px;\n        text-align: center;\n        color: #757575;\n        font-style: italic;\n    }\n\n    .load-more {\n        padding: 10px;\n        text-align: center;\n        background-color: #f5f5f5;\n        border-radius: 4px;\n        margin-top: 15px;\n        cursor: pointer;\n    }\n\n    .load-more:hover {\n        background-color: #e0e0e0;\n    }\n</style>\n\n<div class=\"log-container\" ng-init=\"init()\">\n    <div class=\"log-header\">\n        <div class=\"log-title\">Todo Activity Log</div>\n        <div class=\"log-stats\">\n            <div class=\"stats-item update\">{{updateCount}} Updates</div>\n            <div class=\"stats-item create\">{{createCount}} Creates</div>\n            <div class=\"stats-item delete\">{{deleteCount}} Deletes</div>\n            <div class=\"stats-item complete\">{{completeCount}} Completions</div>\n        </div>\n    </div>\n\n    <!-- Add debug info section (hidden by default) -->\n    <div style=\"padding: 5px; margin-bottom: 10px; background-color: #f0f0f0; border-radius: 4px;\" ng-show=\"showDebug\">\n        <div><strong>Debug Info:</strong> <button ng-click=\"showDebug = !showDebug\">Hide</button></div>\n        <div>Log Entries: {{logEntries.length}}</div>\n        <div>Error: {{error}}</div>\n        <div>Last Response: {{lastResponse}}</div>\n    </div>\n    <div style=\"text-align: right; margin: -10px 0 10px;\">\n        <button ng-click=\"showDebug = !showDebug\" style=\"font-size: 10px; padding: 2px 5px;\">{{showDebug ? 'Hide' : 'Show'}} Debug</button>\n        <button ng-click=\"refreshLogs()\" style=\"font-size: 10px; padding: 2px 5px; margin-left: 5px;\">Refresh</button>\n    </div>\n\n    <div class=\"log-filters\">\n        <button class=\"filter-button\" ng-class=\"{active: currentFilter === 'all'}\" ng-click=\"setFilter('all')\">All Activity</button>\n        <button class=\"filter-button\" ng-class=\"{active: currentFilter === 'update'}\" ng-click=\"setFilter('update')\">Updates</button>\n        <button class=\"filter-button\" ng-class=\"{active: currentFilter === 'create'}\" ng-click=\"setFilter('create')\">Creates</button>\n        <button class=\"filter-button\" ng-class=\"{active: currentFilter === 'delete'}\" ng-click=\"setFilter('delete')\">Deletes</button>\n        <button class=\"filter-button\" ng-class=\"{active: currentFilter === 'complete'}\" ng-click=\"setFilter('complete')\">Completions</button>\\n        <!-- Project filter dropdown would go here -->\n        <select class=\"filter-button\" ng-model=\"projectFilter\" ng-change=\"filterByProject()\">\n            <option value=\"all\">All Projects</option>\n            <option ng-repeat=\"project in projects\" value=\"{{project}}\">{{project}}</option>\n        </select>\n    </div>\n\n    <div class=\"log-list\">\n        <div ng-if=\"logEntries.length === 0\" class=\"no-logs\">\n            No activity logs found matching your filters.\n            <div ng-if=\"loading\">Loading...</div>\n        </div>\n\n        <div ng-repeat=\"entry in logEntries | filter:applyFilters\" class=\"log-card\" ng-class=\"entry.operation\">\n            <div class=\"log-header-row\">\n                <span class=\"log-type\" ng-class=\"entry.operation\">{{entry.operation}}</span>\n                <span class=\"log-timestamp\">{{formatDate(entry.timestamp)}}</span>\n            </div>\n\n            <div class=\"log-title\">{{entry.todoTitle || 'Untitled Todo'}}</div>\n\n            <div>\n                <span class=\"log-project\">{{entry.project || 'No Project'}}</span>\n                <span class=\"log-id\">ID: {{entry.todoId}}</span>\n            </div>\n\n            <div class=\"log-changes\" ng-if=\"entry.changes\">\n                <div class=\"change-item\" ng-repeat=\"change in entry.changes\">\n                    <span class=\"field-name\">{{change.field}}:</span>\n                    <span class=\"previous-value\">{{formatValue(change.oldValue)}}</span>\n                    <span class=\"new-value\">{{formatValue(change.newValue)}}</span>\n                </div>\n            </div>\n        </div>\n\n        <div class=\"load-more\" ng-if=\"hasMoreLogs\" ng-click=\"loadMoreLogs()\">\n            Load More\n        </div>\n    </div>\n</div>\n\n<script>\n    /* globals scope, events, $ */\n(function(scope) {\n    // Initialize the controller\n    scope.init = function() {\n        console.log('Todo Log Panel initialized');\n        scope.logEntries = [];\n        scope.currentFilter = 'all';\n        scope.projectFilter = 'all';\n        scope.projects = [\n            \"All Projects\",\n            \"regressiontestkit\",\n            \"madness_interactive\",\n            \"omnispindle\",\n            \"swarmonomicon\",\n            \"balena_device_management\",\n            \"cogwyrm\",\n            \"docker_implementation\",\n            \"documentation\",\n            \"eventghost-rust\",\n            \"fastmcp\",\n            \"hammerghost\",\n            \"hammerspoon\",\n            \"quality_assurance\",\n            \"spindlewrit\"\n        ];\n        scope.updateCount = 0;\n        scope.createCount = 0;\n        scope.deleteCount = 0;\n        scope.completeCount = 0;\n        scope.pageSize = 20;\n        scope.currentPage = 1;\n        scope.hasMoreLogs = false;\n        scope.showDebug = false;\n        scope.error = null;\n        scope.lastResponse = 'None';\n        scope.loading = false;\n\n        // Load initial data\n        scope.refreshLogs();\n\n        // Listen for new log entries\n        events.on('todo/log/new_entry', function(msg) {\n            console.log('Received todo/log/new_entry event', msg);\n            if (msg && msg.payload) {\n                // Add to the top of the list\n                scope.logEntries.unshift(msg.payload);\n                scope.updateCounts();\n                scope.$apply();\n            }\n        });\n\n        // Listen for log response events\n        events.on('todo/log/response', function(msg) {\n            console.log('Received todo/log/response event', msg);\n            scope.handleLogResponse(msg);\n        });\n\n        // Listen for refresh requests\n        events.on('todo/log/refresh', function() {\n            console.log('Received refresh event');\n            scope.refreshLogs();\n        });\n    };\n\n    // Refresh logs from the server\n    scope.refreshLogs = function() {\n        console.log('Refreshing logs, filter:', scope.currentFilter, 'project:', scope.projectFilter);\n        scope.loading = true;\n        scope.send({\n            topic: 'todo/log/request',\n            payload: {\n                action: 'get_logs',\n                page: scope.currentPage,\n                pageSize: scope.pageSize,\n                filter: scope.currentFilter,\n                project: scope.projectFilter\n            }\n        });\n    };\n\n    // Format date for display\n    scope.formatDate = function(timestamp) {\n        if (!timestamp) return 'Unknown';\n\n        const date = new Date(timestamp);\n        return date.toLocaleString();\n    };\n\n    // Format values for display\n    scope.formatValue = function(value) {\n        if (value === undefined || value === null) return 'None';\n        if (typeof value === 'object') return JSON.stringify(value);\n        return value.toString();\n    };\n\n    // Set the current filter\n    scope.setFilter = function(filter) {\n        scope.currentFilter = filter;\n        scope.currentPage = 1;\n        scope.refreshLogs();\n    };\n\n    // Filter by project\n    scope.filterByProject = function() {\n        scope.currentPage = 1;\n        scope.refreshLogs();\n    };\n\n    // Apply filters to the log entries\n    scope.applyFilters = function(entry) {\n        // Operation type filter\n        if (scope.currentFilter !== 'all' && entry.operation !== scope.currentFilter) {\n            return false;\n        }\n\n        // Project filter\n        if (scope.projectFilter !== 'all' && entry.project !== scope.projectFilter) {\n            return false;\n        }\n\n        return true;\n    };\n\n    // Load more logs\n    scope.loadMoreLogs = function() {\n        scope.currentPage++;\n        console.log('Loading more logs, page:', scope.currentPage);\n        scope.loading = true;\n\n        scope.send({\n            topic: 'todo/log/request',\n            payload: {\n                action: 'get_logs',\n                page: scope.currentPage,\n                pageSize: scope.pageSize,\n                filter: scope.currentFilter,\n                project: scope.projectFilter,\n                append: true\n            }\n        });\n    };\n\n    // Update the counts\n    scope.updateCounts = function() {\n        scope.updateCount = scope.logEntries.filter(e => e.operation === 'update').length;\n        scope.createCount = scope.logEntries.filter(e => e.operation === 'create').length;\n        scope.deleteCount = scope.logEntries.filter(e => e.operation === 'delete').length;\n        scope.completeCount = scope.logEntries.filter(e => e.operation === 'complete').length;\n    };\n\n    // Handle log response data\n    scope.handleLogResponse = function(msg) {\n        if (!msg || !msg.payload) {\n            console.error('Empty log response');\n            scope.error = 'Empty response';\n            scope.loading = false;\n            scope.$apply();\n            return;\n        }\n\n        try {\n            console.log('Processing log response:', msg.payload);\n            scope.lastResponse = JSON.stringify(msg.payload).substring(0, 100) + '...';\n            \n            if (msg.payload.error) {\n                console.error('Error in log response:', msg.payload.error);\n                scope.error = msg.payload.error;\n                scope.loading = false;\n                scope.$apply();\n                return;\n            }\n\n            if (msg.payload.logEntries) {\n                console.log('Found ' + msg.payload.logEntries.length + ' log entries');\n                if (msg.payload.append) {\n                    scope.logEntries = scope.logEntries.concat(msg.payload.logEntries);\n                } else {\n                    scope.logEntries = msg.payload.logEntries;\n                }\n\n                scope.hasMoreLogs = msg.payload.hasMore;\n                if (msg.payload.projects && msg.payload.projects.length) {\n                    scope.projects = [\"all\"].concat(msg.payload.projects);\n                }\n                scope.updateCounts();\n                scope.loading = false;\n                scope.$apply();\n            } else {\n                console.warn('No log entries in response');\n                scope.error = 'No log entries found in response';\n                scope.loading = false;\n                scope.$apply();\n            }\n        } catch (err) {\n            console.error('Error processing log response:', err);\n            scope.error = 'Error processing response: ' + err.message;\n            scope.loading = false;\n            scope.$apply();\n        }\n    };\n\n    // Handle received log data\n    scope.$on('msg', function(msg) {\n        console.log('Received msg in template:', msg);\n        if (!msg || !msg.payload) {\n            console.error('Empty message received in template');\n            return;\n        }\n\n        // Handle the message based on topic\n        if (msg.topic === 'todo/log/response') {\n            scope.handleLogResponse(msg);\n        } else if (msg.topic === 'todo/log/new_entry') {\n            if (msg.payload) {\n                console.log('Adding new log entry to list');\n                scope.logEntries.unshift(msg.payload);\n                scope.updateCounts();\n            }\n        }\n    });\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 953.0000305175781,
+        "y": 1585.0000486373901,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "e880dcb008ea23b1",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "2ff18052d788c794",
+        "name": "Process Response",
+        "func": "// Process API or MongoDB response\n// Add debug info for tracing responses\n\n// Check if this is a MongoDB response\nif (msg.collection === 'todo_logs' && Array.isArray(msg.payload)) {\n    node.warn(\"Received MongoDB response with \" + msg.payload.length + \" entries\");\n    msg.topic = 'todo/log/mongodb_response';\n    // Copy all the MongoDB query parameters\n    msg.limit = msg.limit || 20;\n    msg.skip = msg.skip || 0;\n    return msg;\n}\n\n// Handle API response\nnode.status({ fill: \"blue\", shape: \"dot\", text: \"Response received\" });\n\n// Set topic for consistent routing\nmsg.topic = 'todo/log/response';\n\n// Preserve the append flag\nmsg.append = msg.append || false;\n\n// Debug response in logs\nif (msg.statusCode >= 400) {\n    node.error(\"HTTP Error: \" + msg.statusCode + \", response: \" + JSON.stringify(msg.payload));\n    // Return error message\n    return [{\n        topic: 'todo/log/response',\n        payload: {\n            error: 'HTTP Error: ' + msg.statusCode,\n            logEntries: [],\n            debug: JSON.stringify(msg.payload)\n        }\n    }];\n}\n\nnode.warn(\"Response processed successfully\");\n\nreturn msg; \n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1153.000015258789,
+        "y": 1777.000023841858,
+        "wires": [
+            [
+                "61895d493b9f923c"
+            ]
+        ]
+    },
+    {
+        "id": "38af39d874d40466",
+        "type": "link in",
+        "z": "e890cb64b583ae67",
+        "g": "b00e1184cd8b1e60",
+        "name": "mqtt-out-todo-log",
+        "links": [
+            "2459651df7739072"
+        ],
+        "x": 135,
+        "y": 1580,
+        "wires": [
+            [
+                "3cbf884ecef064d0"
+            ]
+        ]
+    },
+    {
+        "id": "5667be82e2f38333",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "d8ac93aea5cc3164",
+        "name": "Tab Init",
+        "func": "// Handle tab selection to refresh logs when tab is shown\nif (msg.payload && msg.payload.tab === \"t-todo-logs\") {\n    // Tab was selected, refresh logs if needed\n    return {\n        topic: \"todo/log/refresh\",\n        payload: {}\n    };\n}\n\n// Pass through other messages\nreturn msg; \n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 843.0000305175781,
+        "y": 1625.0000486373901,
+        "wires": [
+            [
+                "61895d493b9f923c"
+            ]
+        ]
+    },
+    {
+        "id": "4d2411ea8b25c6e2",
+        "type": "ui_ui_control",
+        "z": "e890cb64b583ae67",
+        "g": "d8ac93aea5cc3164",
+        "name": "UI Control",
+        "events": "all",
+        "x": 693.0000305175781,
+        "y": 1645.0000486373901,
+        "wires": [
+            [
+                "5667be82e2f38333"
+            ]
+        ]
+    },
+    {
+        "id": "1cdab81a6028b016",
+        "type": "mongodb4-client",
+        "name": "swarmonomicon",
+        "protocol": "mongodb",
+        "hostname": "127.0.0.1",
+        "port": "",
+        "dbName": "swarmonomicon",
+        "appName": "",
+        "authSource": "",
+        "authMechanism": "DEFAULT",
+        "tls": false,
+        "tlsCAFile": "",
+        "tlsCertificateKeyFile": "",
+        "tlsInsecure": false,
+        "connectTimeoutMS": "30000",
+        "socketTimeoutMS": "0",
+        "minPoolSize": "0",
+        "maxPoolSize": "100",
+        "maxIdleTimeMS": "0",
+        "uri": "",
+        "advanced": "{}",
+        "uriTabActive": "tab-uri-simple"
+    },
+    {
+        "id": "g-todo-logs",
+        "type": "ui_group",
+        "name": "Todo Activity Logs",
+        "tab": "t-dashboard",
+        "order": 1,
+        "disp": true,
+        "width": "24",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "t-dashboard",
+        "type": "ui_tab",
+        "name": "Omnispindle",
+        "icon": "dashboard",
+        "order": 8,
+        "disabled": false,
+        "hidden": false
+    }
+]

@@ -1,0 +1,1437 @@
+[
+    {
+        "id": "3a50580c0c8a32b7",
+        "type": "tab",
+        "label": "MongoDB Management",
+        "disabled": false,
+        "info": "A comprehensive MongoDB management dashboard for monitoring and cleanup",
+        "env": []
+    },
+    {
+        "id": "83fcac266b7a63e4",
+        "type": "inject",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Hourly Storage Check",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "3600",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "5",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 138,
+        "y": 136,
+        "wires": [
+            [
+                "57628e3aa97dad96"
+            ]
+        ]
+    },
+    {
+        "id": "8c2bd7086307e25e",
+        "type": "inject",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Manual Storage Check",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 138,
+        "y": 296,
+        "wires": [
+            [
+                "57628e3aa97dad96"
+            ]
+        ]
+    },
+    {
+        "id": "57628e3aa97dad96",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Prepare Storage Monitor Query",
+        "func": "// Prepare admin command to get database stats\nmsg.mode = 'collection';\nmsg.operation = 'find';\nmsg.collection = 'gateway_metrics';\nmsg.payload = {};\n\n// Store this message ID so we can match responses later\nflow.set('storageMonitorId', msg._msgid);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 288,
+        "y": 216,
+        "wires": [
+            [
+                "55df4f64c1efbce7"
+            ]
+        ]
+    },
+    {
+        "id": "55df4f64c1efbce7",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Get DB List",
+        "x": 528,
+        "y": 156,
+        "wires": [
+            [
+                "5342167cabf91735",
+                "2506f9632aeb6805"
+            ]
+        ]
+    },
+    {
+        "id": "5342167cabf91735",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Process Storage Stats",
+        "func": "// Process database list results\nif (msg.payload && msg.payload.databases) {\n    const dbs = msg.payload.databases;\n    let dbStats = [];\n    let totalSize = 0;\n    \n    // Store database names for further processing\n    flow.set('pendingDbs', dbs.map(db => db.name));\n    flow.set('dbStats', {});\n    \n    // For each database, send a request to get its stats\n    if (dbs.length > 0) {\n        // Get stats for the first database\n        const dbName = dbs[0].name;\n        msg.mode = 'db';\n        msg.operation = 'stats';\n        msg.db = dbName;\n        msg.payload = {};\n        \n        return msg;\n    }\n}\n\n// If we receive stats for a database, process them\nif (msg.payload && msg.payload.db) {\n    // Get pending databases\n    const pendingDbs = flow.get('pendingDbs') || [];\n    const dbStats = flow.get('dbStats') || {};\n    \n    // Add stats for this database\n    dbStats[msg.payload.db] = {\n        name: msg.payload.db,\n        dataSize: msg.payload.dataSize || 0,\n        indexSize: msg.payload.indexSize || 0,\n        totalSize: (msg.payload.dataSize || 0) + (msg.payload.indexSize || 0)\n    };\n    \n    flow.set('dbStats', dbStats);\n    \n    // If there are more databases to process\n    if (pendingDbs.length > 1) {\n        // Move to the next database\n        pendingDbs.shift();\n        flow.set('pendingDbs', pendingDbs);\n        \n        const nextDb = pendingDbs[0];\n        msg.mode = 'db';\n        msg.operation = 'stats';\n        msg.db = nextDb;\n        msg.payload = {};\n        \n        return msg;\n    } else {\n        // All databases processed, prepare final output\n        const allDbStats = flow.get('dbStats') || {};\n        const dbStatsList = Object.values(allDbStats);\n        \n        let totalSize = 0;\n        dbStatsList.forEach(db => {\n            totalSize += db.totalSize;\n        });\n        \n        // Format bytes function\n        const formatBytes = (bytes) => {\n            if (bytes === 0) return '0 Bytes';\n            const k = 1024;\n            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];\n            const i = Math.floor(Math.log(bytes) / Math.log(k));\n            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];\n        };\n        \n        // Prepare output\n        const result = {\n            type: 'storageStats',\n            data: {\n                timestamp: new Date(),\n                totalSize: totalSize,\n                totalSizeFormatted: formatBytes(totalSize),\n                databaseStats: dbStatsList.map(db => {\n                    return {\n                        ...db,\n                        dataSizeFormatted: formatBytes(db.dataSize),\n                        indexSizeFormatted: formatBytes(db.indexSize),\n                        totalSizeFormatted: formatBytes(db.totalSize)\n                    };\n                }),\n                diskUsagePercent: (totalSize / (8 * 1024 * 1024 * 1024)) * 100 // Assuming 8GB total storage\n            }\n        };\n        \n        // Send final result\n        const outputMsg = { payload: result };\n        return outputMsg;\n    }\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 758,
+        "y": 216,
+        "wires": [
+            [
+                "7e38717b2aee525a",
+                "6224f0bae5cfdbc9",
+                "ddfbb2929b3edd2f"
+            ]
+        ]
+    },
+    {
+        "id": "7e38717b2aee525a",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Get DB Stats",
+        "x": 748,
+        "y": 176,
+        "wires": [
+            [
+                "5342167cabf91735"
+            ]
+        ]
+    },
+    {
+        "id": "ddfbb2929b3edd2f",
+        "type": "switch",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Check Storage Threshold",
+        "property": "payload.data.diskUsagePercent",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "gte",
+                "v": "80",
+                "vt": "num"
+            },
+            {
+                "t": "gte",
+                "v": "90",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 1048,
+        "y": 136,
+        "wires": [
+            [
+                "da11c093a6398cfe"
+            ],
+            [
+                "43b39366bc8bb724"
+            ]
+        ]
+    },
+    {
+        "id": "da11c093a6398cfe",
+        "type": "ui_toast",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "position": "top right",
+        "displayTime": "5",
+        "highlight": "",
+        "sendall": true,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "topic": "Storage Warning",
+        "name": "Warning Notification",
+        "x": 1258,
+        "y": 96,
+        "wires": []
+    },
+    {
+        "id": "43b39366bc8bb724",
+        "type": "ui_toast",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "position": "top right",
+        "displayTime": "10",
+        "highlight": "red",
+        "sendall": true,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "topic": "CRITICAL: MongoDB Storage",
+        "name": "Critical Notification",
+        "x": 1248,
+        "y": 176,
+        "wires": []
+    },
+    {
+        "id": "6224f0bae5cfdbc9",
+        "type": "ui_template",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "group": "mongodb_controls",
+        "name": "StorageDashboardStorageDashboardSt",
+        "order": 1,
+        "width": "0",
+        "height": "0",
+        "format": "<div ng-init=\"init()\" id=\"mongodb-storage-dashboard\">\n  <div class=\"storage-summary\">\n    <div class=\"summary-card\">\n      <h3>Total MongoDB Storage</h3>\n      <div class=\"storage-meter\">\n        <div class=\"progress-bar\" ng-style=\"{'width': stats.diskUsagePercent + '%', 'background-color': getProgressColor(stats.diskUsagePercent)}\"></div>\n      </div>\n      <div class=\"storage-text\">\n        <span class=\"large-text\">{{stats.totalSizeFormatted}}</span>\n        <span class=\"percentage\">{{stats.diskUsagePercent.toFixed(2)}}% of 8GB</span>\n      </div>\n    </div>\n  </div>\n  \n  <div class=\"database-section\">\n    <h3>Database Size Distribution</h3>\n    <div class=\"database-list\">\n      <div class=\"database-item\" ng-repeat=\"db in stats.databaseStats | orderBy:'-totalSize'\">\n        <div class=\"db-name\">{{db.name}}</div>\n        <div class=\"size-bar\">\n          <div class=\"data-size\" ng-style=\"{'width': getPercent(db.dataSize, stats.totalSize) + '%'}\"></div>\n          <div class=\"index-size\" ng-style=\"{'width': getPercent(db.indexSize, stats.totalSize) + '%'}\"></div>\n        </div>\n        <div class=\"size-text\">\n          <span>{{db.totalSizeFormatted}}</span>\n          <span class=\"details\">(Data: {{db.dataSizeFormatted}}, Index: {{db.indexSizeFormatted}})</span>\n        </div>\n      </div>\n    </div>\n  </div>\n  \n  <div class=\"collection-section\" ng-if=\"collections.length > 0\">\n    <h3>Top Collections by Size</h3>\n    <div class=\"collection-table\">\n      <div class=\"table-header\">\n        <div class=\"col-name\">Collection</div>\n        <div class=\"col-size\">Size</div>\n        <div class=\"col-count\">Documents</div>\n        <div class=\"col-actions\">Actions</div>\n      </div>\n      <div class=\"table-row\" ng-repeat=\"col in collections | orderBy:'-totalSize' | limitTo:10\">\n        <div class=\"col-name\">{{col.name}}</div>\n        <div class=\"col-size\">{{col.totalSizeFormatted}}</div>\n        <div class=\"col-count\">{{col.count.toLocaleString()}}</div>\n        <div class=\"col-actions\">\n          <button ng-click=\"cleanupCollection(col.name)\" class=\"cleanup-btn\">Cleanup</button>\n        </div>\n      </div>\n    </div>\n  </div>\n</div>\n\n<style>\n  #mongodb-storage-dashboard {\n    font-family: 'Segoe UI', Arial, sans-serif;\n    padding: 20px;\n    background-color: #121212;\n    color: #ecf0f1;\n  }\n  \n  h3 {\n    margin-top: 0;\n    margin-bottom: 15px;\n    font-size: 18px;\n    color: #3498db;\n  }\n  \n  .storage-summary {\n    margin-bottom: 25px;\n  }\n  \n  .summary-card {\n    background-color: #1a1a1a;\n    border-radius: 6px;\n    padding: 15px;\n    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);\n  }\n  \n  .storage-meter {\n    height: 25px;\n    background-color: #2a2a2a;\n    border-radius: 4px;\n    margin: 15px 0 10px;\n    overflow: hidden;\n  }\n  \n  .progress-bar {\n    height: 100%;\n    transition: width 0.5s ease;\n  }\n  \n  .storage-text {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n  }\n  \n  .large-text {\n    font-size: 24px;\n    font-weight: bold;\n  }\n  \n  .percentage {\n    color: #bdc3c7;\n  }\n  \n  .database-section, .collection-section {\n    background-color: #1a1a1a;\n    border-radius: 6px;\n    padding: 15px;\n    margin-bottom: 25px;\n    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);\n  }\n  \n  .database-list {\n    display: flex;\n    flex-direction: column;\n    gap: 12px;\n  }\n  \n  .database-item {\n    display: flex;\n    flex-direction: column;\n    gap: 5px;\n  }\n  \n  .db-name {\n    font-weight: bold;\n  }\n  \n  .size-bar {\n    height: 12px;\n    background-color: #2a2a2a;\n    border-radius: 3px;\n    overflow: hidden;\n    display: flex;\n  }\n  \n  .data-size {\n    height: 100%;\n    background-color: #3498db;\n  }\n  \n  .index-size {\n    height: 100%;\n    background-color: #2ecc71;\n  }\n  \n  .size-text {\n    display: flex;\n    justify-content: space-between;\n    font-size: 14px;\n  }\n  \n  .details {\n    color: #bdc3c7;\n    font-size: 12px;\n  }\n  \n  .collection-table {\n    display: table;\n    width: 100%;\n    border-collapse: collapse;\n  }\n  \n  .table-header {\n    display: table-row;\n    font-weight: bold;\n    border-bottom: 1px solid #2a2a2a;\n  }\n  \n  .table-row {\n    display: table-row;\n    border-bottom: 1px solid #2a2a2a;\n  }\n  \n  .table-row:hover {\n    background-color: #222;\n  }  \n  .col-name, .col-size, .col-count, .col-actions {\n    display: table-cell;\n    padding: 10px 5px;\n  }\n  \n  .col-name {\n    width: 40%;\n  }\n  \n  .col-size {\n    width: 20%;\n  }\n  \n  .col-count {\n    width: 20%;\n    text-align: right;\n  }\n  \n  .col-actions {\n    width: 20%;\n    text-align: center;\n  }\n  \n  .cleanup-btn {\n    background-color: #e74c3c;\n    color: white;\n    border: none;\n    border-radius: 3px;\n    padding: 5px 10px;\n    cursor: pointer;\n    font-size: 12px;\n  }\n  \n  .cleanup-btn:hover {\n    background-color: #c0392b;\n  }\n</style>\n\n<script>\n(function(scope) {\n  scope.init = function() {\n    scope.stats = {\n      totalSize: 0,\n      totalSizeFormatted: '0 MB',\n      diskUsagePercent: 0,\n      databaseStats: []\n    };\n    \n    scope.collections = [];\n    \n    scope.getProgressColor = function(percent) {\n      if (percent < 60) return '#2ecc71'; // Green\n      if (percent < 80) return '#f39c12'; // Orange\n      return '#e74c3c'; // Red\n    };\n    \n    scope.getPercent = function(value, total) {\n      if (total === 0) return 0;\n      return (value / total) * 100;\n    };\n    \n    scope.cleanupCollection = function(collectionName) {\n      // This function will trigger a cleanup operation\n      const action = {\n        type: 'cleanup',\n        collection: collectionName,\n        database: scope.currentDatabase\n      };\n      \n      // Send action via UI control message\n      scope.send({\n        topic: 'mongodb-cleanup',\n        payload: action\n      });\n    };\n    \n    scope.$watch('msg.payload', function(payload) {\n      if (!payload) return;\n      \n      if (payload.type === 'storageStats') {\n        scope.stats = payload.data;\n      }\n      else if (payload.type === 'collectionStats') {\n        scope.collections = payload.data.collections;\n        scope.currentDatabase = payload.data.database;\n      }\n    });\n  };\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "x": 1218,
+        "y": 276,
+        "wires": [
+            [
+                "9e87742410a3fb9c"
+            ]
+        ]
+    },
+    {
+        "id": "c069b19e65711743",
+        "type": "inject",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Daily Collection Stats",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "86400",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "10",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 138,
+        "y": 356,
+        "wires": [
+            [
+                "ed2061ba20235921"
+            ]
+        ]
+    },
+    {
+        "id": "ed2061ba20235921",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Prepare DB List Query",
+        "func": "// Prepare admin command to get database list\nmsg.mode = 'collection';\nmsg.operation = 'find';\nmsg.collection = 'gateway_metrics';\nmsg.payload = {};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 198,
+        "y": 416,
+        "wires": [
+            [
+                "4ffe9a6415c5518d"
+            ]
+        ]
+    },
+    {
+        "id": "4ffe9a6415c5518d",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "mode": "collection",
+        "collection": "gateway_metrics",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Get Databases",
+        "x": 460,
+        "y": 340,
+        "wires": [
+            [
+                "3f66f915e91ac3bd",
+                "2506f9632aeb6805"
+            ]
+        ]
+    },
+    {
+        "id": "3f66f915e91ac3bd",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Filter and Process DB List",
+        "func": "// Filter out admin and config databases\nif (msg.payload && msg.payload.databases) {\n    const filteredDbs = msg.payload.databases.filter(db => \n        !['admin', 'config', 'local'].includes(db.name));\n    \n    // Send a message for each database to get its collections\n    if (filteredDbs.length > 0) {\n        filteredDbs.forEach(db => {\n            node.send({ payload: { database: db.name } });\n        });\n    }\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 488,
+        "y": 416,
+        "wires": [
+            [
+                "bd994c69dace6070"
+            ]
+        ]
+    },
+    {
+        "id": "bd994c69dace6070",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Prepare Collection Stats Query",
+        "func": "// Prepare query to get collection stats\nif (msg.payload && msg.payload.database) {\n    const dbName = msg.payload.database;\n    \n    // Store database name for the stats node to use\n    msg.db = dbName;\n    msg.mode = 'db';\n    msg.operation = 'listCollections';\n    msg.payload = {};\n    \n    // Store this database name for later processing\n    flow.set('currentDb', dbName);\n    \n    return msg;\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 628,
+        "y": 476,
+        "wires": [
+            [
+                "41280fd40f7f99d0"
+            ]
+        ]
+    },
+    {
+        "id": "41280fd40f7f99d0",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Get Collections",
+        "x": 778,
+        "y": 416,
+        "wires": [
+            [
+                "fc079fc1104c25b4"
+            ]
+        ]
+    },
+    {
+        "id": "fc079fc1104c25b4",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Process Collections & Get Stats",
+        "func": "// Process collection list and get stats for each\nif (msg.payload) {\n    const collections = msg.payload;\n    const dbName = flow.get('currentDb');\n    \n    if (collections.length > 0) {\n        // Store collection list for processing\n        flow.set('pendingCollections', collections.map(col => col.name));\n        flow.set('collectionStats', {});\n        \n        // Get stats for the first collection\n        const firstCollection = collections[0].name;\n        \n        msg.db = dbName;\n        msg.mode = 'collection';\n        msg.collection = firstCollection;\n        msg.operation = 'stats';\n        msg.payload = {};\n        \n        return msg;\n    }\n}\n\n// If we receive stats for a collection\nif (msg.payload && msg.payload.ns) {\n    const pendingCollections = flow.get('pendingCollections') || [];\n    const collectionStats = flow.get('collectionStats') || {};\n    const dbName = flow.get('currentDb');\n    \n    // Parse the namespace to get collection name\n    const ns = msg.payload.ns.split('.');\n    const collectionName = ns[ns.length - 1];\n    \n    // Add stats for this collection\n    collectionStats[collectionName] = {\n        name: collectionName,\n        count: msg.payload.count || 0,\n        size: msg.payload.size || 0,\n        avgObjSize: msg.payload.avgObjSize || 0,\n        storageSize: msg.payload.storageSize || 0,\n        indexSize: msg.payload.totalIndexSize || 0,\n        totalSize: (msg.payload.storageSize || 0) + (msg.payload.totalIndexSize || 0)\n    };\n    \n    flow.set('collectionStats', collectionStats);\n    \n    // If there are more collections to process\n    if (pendingCollections.length > 1) {\n        // Move to the next collection\n        pendingCollections.shift();\n        flow.set('pendingCollections', pendingCollections);\n        \n        const nextCollection = pendingCollections[0];\n        \n        msg.db = dbName;\n        msg.mode = 'collection';\n        msg.collection = nextCollection;\n        msg.operation = 'stats';\n        msg.payload = {};\n        \n        return msg;\n    } else {\n        // All collections processed, prepare final output\n        const allColStats = flow.get('collectionStats') || {};\n        const colStatsList = Object.values(allColStats);\n        \n        // Sort by total size (largest first)\n        colStatsList.sort((a, b) => b.totalSize - a.totalSize);\n        \n        // Format sizes\n        const formatBytes = (bytes) => {\n            if (bytes === 0) return '0 Bytes';\n            const k = 1024;\n            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];\n            const i = Math.floor(Math.log(bytes) / Math.log(k));\n            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];\n        };\n        \n        // Prepare output\n        const result = {\n            type: 'collectionStats',\n            data: {\n                database: dbName,\n                collections: colStatsList.map(col => {\n                    return {\n                        ...col,\n                        sizeFormatted: formatBytes(col.size),\n                        storageSizeFormatted: formatBytes(col.storageSize),\n                        indexSizeFormatted: formatBytes(col.indexSize),\n                        totalSizeFormatted: formatBytes(col.totalSize)\n                    };\n                })\n            }\n        };\n        \n        // Send final result\n        return { payload: result };\n    }\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 868,
+        "y": 356,
+        "wires": [
+            [
+                "31f23505e3f736cf",
+                "6224f0bae5cfdbc9"
+            ]
+        ]
+    },
+    {
+        "id": "31f23505e3f736cf",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Get Collection Stats",
+        "x": 878,
+        "y": 296,
+        "wires": [
+            [
+                "fc079fc1104c25b4"
+            ]
+        ]
+    },
+    {
+        "id": "9e87742410a3fb9c",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Handle UI Actions",
+        "func": "// Handle actions from the UI\nif (msg.topic === 'mongodb-cleanup' && msg.payload && msg.payload.type === 'cleanup') {\n    // Prepare cleanup message\n    const cleanupMsg = {\n        payload: {\n            database: msg.payload.database,\n            collection: msg.payload.collection,\n            cleanupType: 'age',  // Default to age-based cleanup\n            ageThreshold: 30,    // Default to 30 days\n            dryRun: false       // Actually perform the cleanup\n        }\n    };\n    \n    return cleanupMsg;\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1288,
+        "y": 376,
+        "wires": [
+            [
+                "835c1e0735c32871"
+            ]
+        ]
+    },
+    {
+        "id": "835c1e0735c32871",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Prepare MongoDB Cleanup",
+        "func": "// Prepare parameters for MongoDB cleanup\nif (msg.payload && msg.payload.database && msg.payload.collection) {\n    // Set up parameters for the cleanup operation\n    const database = msg.payload.database;\n    const collection = msg.payload.collection;\n    const cleanupType = msg.payload.cleanupType || 'age';\n    const ageThreshold = msg.payload.ageThreshold || 30; // Default to 30 days\n    const countThreshold = msg.payload.countThreshold || 1000; // Default to 1000 records\n    const dryRun = msg.payload.dryRun === true;\n    \n    // Store parameters in flow context for the actual cleanup operation\n    flow.set('cleanupParams', {\n        database: database,\n        collection: collection,\n        cleanupType: cleanupType,\n        ageThreshold: ageThreshold,\n        countThreshold: countThreshold,\n        dryRun: dryRun,\n        processingMeta: msg.payload.processingMeta\n    });\n    \n    // Set up query based on cleanup type\n    if (cleanupType === 'age') {\n        const thresholdDate = new Date();\n        thresholdDate.setDate(thresholdDate.getDate() - ageThreshold);\n        \n        // Prepare age-based query\n        msg.db = database;\n        msg.mode = 'collection';\n        msg.collection = collection;\n        msg.operation = 'remove';\n        msg.payload = {\n            $or: [\n                { timestamp: { $lt: thresholdDate } },\n                { createdAt: { $lt: thresholdDate } },\n                { date: { $lt: thresholdDate } }\n            ]\n        };\n        \n        node.log(`Cleaning up documents in ${database}.${collection} older than ${ageThreshold} days (before ${thresholdDate})`);\n        return msg;\n    }\n    else if (cleanupType === 'count') {\n        // For count-based cleanup, we need first to get total count\n        msg.db = database;\n        msg.mode = 'collection';\n        msg.collection = collection;\n        msg.operation = 'count';\n        msg.payload = {};\n        \n        return msg;\n    }\n}\n\n// Handle count-based cleanup after getting count\nif (msg.payload && typeof msg.payload === 'number' && flow.get('cleanupParams')) {\n    const params = flow.get('cleanupParams');\n    const totalCount = msg.payload;\n    \n    if (params.cleanupType === 'count' && totalCount > params.countThreshold) {\n        // We need to get the newest N documents to keep\n        msg.db = params.database;\n        msg.mode = 'collection';\n        msg.collection = params.collection;\n        msg.operation = 'find';\n        msg.payload = {};\n        msg.limit = params.countThreshold;\n        msg.sort = { timestamp: -1 };\n        msg.projection = { _id: 1 };\n        \n        return msg;\n    } else if (params.cleanupType === 'count') {\n        // No cleanup needed, count is below threshold\n        node.log(`Collection has ${totalCount} documents, below threshold of ${params.countThreshold}. No cleanup needed.`);\n        \n        // If we're processing in batch mode, continue with next collection/database\n        continueProcessing();\n        return null;\n    }\n}\n\n// Handle count-based cleanup after getting IDs to keep\nif (Array.isArray(msg.payload) && flow.get('cleanupParams')) {\n    const params = flow.get('cleanupParams');\n    \n    if (params.cleanupType === 'count') {\n        const keepIds = msg.payload.map(doc => doc._id);\n        \n        // Now remove all documents except those in the keepIds list\n        msg.db = params.database;\n        msg.mode = 'collection';\n        msg.collection = params.collection;\n        msg.operation = 'remove';\n        msg.payload = {\n            _id: { $nin: keepIds }\n        };\n        \n        node.log(`Cleaning up ${params.collection} to keep only the newest ${params.countThreshold} records`);\n        return msg;\n    }\n}\n\n// Handle cleanup results\nif (msg.payload && msg.payload.n !== undefined) {\n    const params = flow.get('cleanupParams');\n    const deletedCount = msg.payload.n;\n    \n    // Log results\n    if (params.dryRun) {\n        node.log(`[DRY RUN] Would delete ${deletedCount} documents from ${params.collection}`);\n    } else {\n        node.log(`Deleted ${deletedCount} documents from ${params.collection}`);\n    }\n    \n    // Get collection stats after cleanup\n    msg.db = params.database;\n    msg.mode = 'collection';\n    msg.collection = params.collection;\n    msg.operation = 'stats';\n    msg.payload = {};\n    \n    return msg;\n}\n\n// Process stats results\nif (msg.payload && msg.payload.ns && flow.get('cleanupParams')) {\n    const params = flow.get('cleanupParams');\n    const stats = msg.payload;\n    \n    // Format bytes function\n    const formatBytes = (bytes) => {\n        if (bytes === 0) return '0 Bytes';\n        const k = 1024;\n        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];\n        const i = Math.floor(Math.log(bytes) / Math.log(k));\n        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];\n    };\n    \n    // Prepare result notification\n    const result = {\n        topic: 'cleanup-result',\n        payload: {\n            result: params.dryRun ? 'dryRun' : 'success',\n            database: params.database,\n            collection: params.collection,\n            deletedCount: stats.count,\n            dryRun: params.dryRun,\n            updatedStats: {\n                count: stats.count,\n                size: stats.size,\n                sizeFormatted: formatBytes(stats.size),\n                storageSize: stats.storageSize,\n                storageSizeFormatted: formatBytes(stats.storageSize),\n                indexSize: stats.totalIndexSize,\n                indexSizeFormatted: formatBytes(stats.totalIndexSize)\n            }\n        }\n    };\n    \n    // Continue batch processing if needed\n    continueProcessing();\n    \n    // Send cleanup result notification\n    node.send(result);\n    \n    // Also trigger a storage refresh\n    setTimeout(() => {\n        node.send({\n            topic: 'refresh-storage',\n            payload: { command: 'refresh' }\n        });\n    }, 1000);\n    \n    return null;\n}\n\n// Helper function to continue batch processing\nfunction continueProcessing() {\n    const params = flow.get('cleanupParams');\n    \n    if (params && params.processingMeta) {\n        const meta = params.processingMeta;\n        \n        if (meta.remainingCollections && meta.remainingCollections.length > 0) {\n            // Process next collection in current database\n            const nextCollection = meta.remainingCollections[0];\n            \n            node.send({\n                payload: {\n                    database: params.database,\n                    collection: nextCollection,\n                    cleanupType: 'age',\n                    ageThreshold: meta.threshold,\n                    dryRun: false,\n                    processingMeta: {\n                        ...meta,\n                        remainingCollections: meta.remainingCollections.slice(1)\n                    }\n                }\n            });\n        } else if (meta.remainingDbs && meta.remainingDbs.length > 0) {\n            // Move to next database\n            const nextDb = meta.remainingDbs[0];\n            \n            node.send({\n                payload: {\n                    action: 'cleanup',\n                    database: nextDb,\n                    threshold: meta.threshold,\n                    remainingDbs: meta.remainingDbs.slice(1)\n                }\n            });\n        } else {\n            // All done\n            node.send({\n                payload: {\n                    result: 'complete',\n                    message: 'Batch cleanup process completed'\n                }\n            });\n        }\n    }\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1518,
+        "y": 616,
+        "wires": [
+            [
+                "cce0efdab76b321f",
+                "348c744d697b8cba",
+                "4b4c9fcbb3486461"
+            ]
+        ]
+    },
+    {
+        "id": "cce0efdab76b321f",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Execute Cleanup",
+        "x": 1528,
+        "y": 576,
+        "wires": [
+            [
+                "835c1e0735c32871"
+            ]
+        ]
+    },
+    {
+        "id": "348c744d697b8cba",
+        "type": "ui_toast",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "position": "top right",
+        "displayTime": "5",
+        "highlight": "",
+        "sendall": true,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "topic": "MongoDB Cleanup",
+        "name": "Cleanup Notification",
+        "x": 1698,
+        "y": 656,
+        "wires": []
+    },
+    {
+        "id": "4b4c9fcbb3486461",
+        "type": "link out",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Refresh Stats",
+        "links": [
+            "0245c9160d1b44e5"
+        ],
+        "x": 1863,
+        "y": 496,
+        "wires": []
+    },
+    {
+        "id": "0245c9160d1b44e5",
+        "type": "link in",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Refresh Trigger",
+        "links": [
+            "4b4c9fcbb3486461"
+        ],
+        "x": 93,
+        "y": 216,
+        "wires": [
+            [
+                "57628e3aa97dad96"
+            ]
+        ]
+    },
+    {
+        "id": "b9b52d1f708e9fe1",
+        "type": "ui_button",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Run Maintenance",
+        "group": "mongodb_controls",
+        "order": 1,
+        "width": 4,
+        "height": 1,
+        "passthru": false,
+        "label": "Run Maintenance",
+        "tooltip": "Run database maintenance tasks",
+        "color": "",
+        "bgcolor": "",
+        "icon": "fa-wrench",
+        "payload": "",
+        "payloadType": "str",
+        "topic": "maintenance",
+        "x": 148,
+        "y": 536,
+        "wires": [
+            [
+                "3e286746d7e6f021"
+            ]
+        ]
+    },
+    {
+        "id": "3e286746d7e6f021",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Prepare Maintenance",
+        "func": "// Prepare admin command to get database list for maintenance\nmsg.mode = 'admin';\nmsg.operation = 'listDatabases';\nmsg.payload = {};\n\n// Store message ID for tracking\nflow.set('maintenanceId', msg._msgid);\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 298,
+        "y": 596,
+        "wires": [
+            [
+                "b1d64634e1bf82b1"
+            ]
+        ]
+    },
+    {
+        "id": "b1d64634e1bf82b1",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Get DBs for Maintenance",
+        "x": 508,
+        "y": 556,
+        "wires": [
+            [
+                "5bfb9b7e2a867fbc"
+            ]
+        ]
+    },
+    {
+        "id": "5bfb9b7e2a867fbc",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Process Maintenance",
+        "func": "// Process the list of databases for maintenance\nif (msg.payload && msg.payload.databases) {\n    // Filter out admin and config databases\n    const filteredDbs = msg.payload.databases.filter(db => \n        !['admin', 'config', 'local'].includes(db.name));\n    \n    // Store the database list\n    flow.set('maintenanceDbs', filteredDbs.map(db => db.name));\n    flow.set('maintenanceResults', []);\n    flow.set('maintenanceTotal', filteredDbs.length);\n    flow.set('maintenanceSuccess', 0);\n    flow.set('maintenanceFailed', 0);\n    \n    // Process the first database\n    if (filteredDbs.length > 0) {\n        const firstDb = filteredDbs[0].name;\n        \n        // Set up request to get collections for this database\n        msg.db = firstDb;\n        msg.mode = 'db';\n        msg.operation = 'listCollections';\n        msg.payload = {};\n        \n        return msg;\n    }\n}\n\n// Process collections for a database\nif (msg.payload && Array.isArray(msg.payload) && msg.db) {\n    const collections = msg.payload;\n    const dbName = msg.db;\n    \n    // Set up collection compaction tasks\n    if (collections.length > 0) {\n        // Store collection list\n        flow.set('maintenanceCollections', collections.map(col => col.name));\n        flow.set('currentMaintenanceDb', dbName);\n        \n        // Prepare compact command for the first collection\n        // Skip system collections\n        let collectionName = collections[0].name;\n        let i = 0;\n        while (collectionName.startsWith('system.') && i < collections.length - 1) {\n            i++;\n            collectionName = collections[i].name;\n        }\n        \n        if (!collectionName.startsWith('system.')) {\n            // Set up compact command\n            msg.db = dbName;\n            msg.mode = 'db';\n            msg.operation = 'command';\n            msg.payload = { compact: collectionName };\n            \n            return msg;\n        }\n    }\n    \n    // Move to next database if no valid collections\n    processNextDatabase(msg);\n    return;\n}\n\n// Handle compact result\nif (msg.payload && msg.payload.ok === 1) {\n    // Get current state\n    const maintenanceResults = flow.get('maintenanceResults') || [];\n    const maintenanceCollections = flow.get('maintenanceCollections') || [];\n    const currentDb = flow.get('currentMaintenanceDb');\n    let successCount = flow.get('maintenanceSuccess') || 0;\n    \n    // Add result\n    maintenanceResults.push({\n        database: currentDb,\n        collection: msg.payload.compact,\n        operation: 'compact',\n        success: true,\n        result: msg.payload\n    });\n    \n    // Update success count\n    successCount++;\n    flow.set('maintenanceSuccess', successCount);\n    flow.set('maintenanceResults', maintenanceResults);\n    \n    // Process next collection or move to next database\n    if (maintenanceCollections.length > 1) {\n        // Process next collection\n        maintenanceCollections.shift(); // Remove the one we just processed\n        \n        // Find next non-system collection\n        let nextCollection = maintenanceCollections[0];\n        let i = 0;\n        while (nextCollection.startsWith('system.') && i < maintenanceCollections.length - 1) {\n            i++;\n            nextCollection = maintenanceCollections[i];\n        }\n        \n        if (!nextCollection.startsWith('system.')) {\n            // Set up compact command for next collection\n            msg.db = currentDb;\n            msg.mode = 'db';\n            msg.operation = 'command';\n            msg.payload = { compact: nextCollection };\n            \n            flow.set('maintenanceCollections', maintenanceCollections);\n            return msg;\n        }\n    }\n    \n    // Move to next database\n    processNextDatabase(msg);\n    return;\n}\n\n// Handle compact error\nif (msg.payload && msg.payload.ok === 0) {\n    // Get current state\n    const maintenanceResults = flow.get('maintenanceResults') || [];\n    const maintenanceCollections = flow.get('maintenanceCollections') || [];\n    const currentDb = flow.get('currentMaintenanceDb');\n    let failedCount = flow.get('maintenanceFailed') || 0;\n    \n    // Add error result\n    maintenanceResults.push({\n        database: currentDb,\n        collection: msg.payload.compact || maintenanceCollections[0],\n        operation: 'compact',\n        success: false,\n        error: msg.payload.errmsg || 'Unknown error'\n    });\n    \n    // Update failed count\n    failedCount++;\n    flow.set('maintenanceFailed', failedCount);\n    flow.set('maintenanceResults', maintenanceResults);\n    \n    // Process next collection or move to next database\n    if (maintenanceCollections.length > 1) {\n        // Process next collection\n        maintenanceCollections.shift(); // Remove the one we just processed\n        \n        // Find next non-system collection\n        let nextCollection = maintenanceCollections[0];\n        let i = 0;\n        while (nextCollection.startsWith('system.') && i < maintenanceCollections.length - 1) {\n            i++;\n            nextCollection = maintenanceCollections[i];\n        }\n        \n        if (!nextCollection.startsWith('system.')) {\n            // Set up compact command for next collection\n            msg.db = currentDb;\n            msg.mode = 'db';\n            msg.operation = 'command';\n            msg.payload = { compact: nextCollection };\n            \n            flow.set('maintenanceCollections', maintenanceCollections);\n            return msg;\n        }\n    }\n    \n    // Move to next database\n    processNextDatabase(msg);\n    return;\n}\n\n// Helper function to process next database\nfunction processNextDatabase(msg) {\n    const maintenanceDbs = flow.get('maintenanceDbs') || [];\n    \n    if (maintenanceDbs.length > 1) {\n        // Move to next database\n        maintenanceDbs.shift(); // Remove the one we just processed\n        flow.set('maintenanceDbs', maintenanceDbs);\n        \n        // Process next database\n        const nextDb = maintenanceDbs[0];\n        msg.db = nextDb;\n        msg.mode = 'db';\n        msg.operation = 'listCollections';\n        msg.payload = {};\n        \n        return msg;\n    } else {\n        // All databases processed, send final result\n        const results = flow.get('maintenanceResults') || [];\n        const total = flow.get('maintenanceTotal') || 0;\n        const success = flow.get('maintenanceSuccess') || 0;\n        const failed = flow.get('maintenanceFailed') || 0;\n        \n        // Return maintenance results\n        return {\n            topic: 'maintenance-result',\n            payload: {\n                operation: 'maintenance',\n                timestamp: new Date(),\n                results: results,\n                summary: {\n                    total: total,\n                    success: success,\n                    failed: failed\n                }\n            }\n        };\n    }\n}\n\n// If we get here, something went wrong\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 978,
+        "y": 536,
+        "wires": [
+            [
+                "3045ee19f1e319a0",
+                "a3a0ce70a14d692b",
+                "4b4c9fcbb3486461"
+            ]
+        ]
+    },
+    {
+        "id": "3045ee19f1e319a0",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Execute Maintenance",
+        "x": 998,
+        "y": 496,
+        "wires": [
+            [
+                "5bfb9b7e2a867fbc"
+            ]
+        ]
+    },
+    {
+        "id": "a3a0ce70a14d692b",
+        "type": "ui_toast",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "position": "top right",
+        "displayTime": "5",
+        "highlight": "",
+        "sendall": true,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "topic": "MongoDB Maintenance",
+        "name": "Maintenance Notification",
+        "x": 1108,
+        "y": 576,
+        "wires": []
+    },
+    {
+        "id": "62c6256525efa05b",
+        "type": "ui_form",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Cleanup Options",
+        "label": "Configure Cleanup",
+        "group": "mongodb_controls",
+        "order": 2,
+        "width": "6",
+        "height": "4",
+        "options": [
+            {
+                "label": "Database",
+                "value": "database",
+                "type": "text",
+                "required": true
+            },
+            {
+                "label": "Collection",
+                "value": "collection",
+                "type": "text",
+                "required": true
+            },
+            {
+                "label": "Cleanup Type",
+                "value": "cleanupType",
+                "type": "select",
+                "options": [
+                    {
+                        "value": "age",
+                        "label": "Age-based (days)"
+                    },
+                    {
+                        "value": "count",
+                        "label": "Count-based (keep newest N)"
+                    }
+                ],
+                "required": true
+            },
+            {
+                "label": "Threshold",
+                "value": "threshold",
+                "type": "number",
+                "required": true
+            },
+            {
+                "label": "Dry Run",
+                "value": "dryRun",
+                "type": "checkbox"
+            }
+        ],
+        "formValue": {
+            "database": "",
+            "collection": "",
+            "cleanupType": "age",
+            "threshold": 30,
+            "dryRun": true
+        },
+        "payload": "",
+        "submit": "Execute Cleanup",
+        "cancel": "Cancel",
+        "topic": "cleanup-form",
+        "x": 988,
+        "y": 636,
+        "wires": [
+            [
+                "aea92a11a8ccbf01"
+            ]
+        ]
+    },
+    {
+        "id": "aea92a11a8ccbf01",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Process Cleanup Form",
+        "func": "// Process Cleanup Form function will be implemented here",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1198,
+        "y": 636,
+        "wires": [
+            [
+                "835c1e0735c32871"
+            ]
+        ]
+    },
+    {
+        "id": "9b132fd10521c736",
+        "type": "ui_template",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "group": "mongodb_controls",
+        "name": "System Stats",
+        "order": 3,
+        "width": "6",
+        "height": "4",
+        "format": "<div id=\"mongodb-system-stats\">\n  <h3>System Resources</h3>\n  <div class=\"stats-container\">\n    <div class=\"stat-item\">\n      <div class=\"stat-label\">CPU Usage</div>\n      <div class=\"stat-meter\">\n        <div class=\"meter-fill\" ng-style=\"{'width': cpuUsage + '%', 'background-color': getColor(cpuUsage)}\"></div>\n      </div>\n      <div class=\"stat-value\">{{cpuUsage}}%</div>\n    </div>\n    \n    <div class=\"stat-item\">\n      <div class=\"stat-label\">Memory Usage</div>\n      <div class=\"stat-meter\">\n        <div class=\"meter-fill\" ng-style=\"{'width': memoryPercent + '%', 'background-color': getColor(memoryPercent)}\"></div>\n      </div>\n      <div class=\"stat-value\">{{memoryUsed}} / {{memoryTotal}} ({{memoryPercent}}%)</div>\n    </div>\n    \n    <div class=\"stat-item\">\n      <div class=\"stat-label\">Disk Usage</div>\n      <div class=\"stat-meter\">\n        <div class=\"meter-fill\" ng-style=\"{'width': diskPercent + '%', 'background-color': getColor(diskPercent)}\"></div>\n      </div>\n      <div class=\"stat-value\">{{diskUsed}} / {{diskTotal}} ({{diskPercent}}%)</div>\n    </div>\n  </div>\n</div>\n\n<style>\n  #mongodb-system-stats {\n    font-family: 'Segoe UI', Arial, sans-serif;\n    padding: 15px;\n    background-color: #1a1a1a;\n    border-radius: 6px;\n    color: #ecf0f1;\n  }\n  \n  h3 {\n    margin-top: 0;\n    margin-bottom: 15px;\n    font-size: 18px;\n    color: #3498db;\n  }\n  \n  .stats-container {\n    display: flex;\n    flex-direction: column;\n    gap: 15px;\n  }\n  \n  .stat-item {\n    display: flex;\n    flex-direction: column;\n    gap: 5px;\n  }\n  \n  .stat-label {\n    font-weight: bold;\n    font-size: 14px;\n  }\n  \n  .stat-meter {\n    height: 10px;\n    background-color: #2a2a2a;\n    border-radius: 5px;\n    overflow: hidden;\n  }\n  \n  .meter-fill {\n    height: 100%;\n    transition: width 0.5s ease;\n  }\n  \n  .stat-value {\n    font-size: 14px;\n    color: #bdc3c7;\n  }\n</style>\n\n<script>\n(function(scope) {\n  scope.cpuUsage = 0;\n  scope.memoryUsed = '0 GB';\n  scope.memoryTotal = '8 GB';\n  scope.memoryPercent = 0;\n  scope.diskUsed = '0 GB';\n  scope.diskTotal = '8 GB';\n  scope.diskPercent = 0;\n  \n  scope.getColor = function(percent) {\n    if (percent < 60) return '#2ecc71'; // Green\n    if (percent < 80) return '#f39c12'; // Orange\n    return '#e74c3c'; // Red\n  };\n  \n  scope.$watch('msg', function(msg) {\n    if (msg && msg.payload && msg.payload.type === 'systemStats') {\n      const stats = msg.payload.data;\n      scope.cpuUsage = stats.cpuUsage;\n      scope.memoryUsed = stats.memoryUsed;\n      scope.memoryTotal = stats.memoryTotal;\n      scope.memoryPercent = stats.memoryPercent;\n      scope.diskUsed = stats.diskUsed;\n      scope.diskTotal = stats.diskTotal;\n      scope.diskPercent = stats.diskPercent;\n    }\n  });\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "x": 460,
+        "y": 62,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "bfcead730bfb99ae",
+        "type": "inject",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "System Stats Check",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "60",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "15",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 230,
+        "y": 62,
+        "wires": [
+            [
+                "0e72b499d7ed9180"
+            ]
+        ]
+    },
+    {
+        "id": "0e72b499d7ed9180",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Get System Stats",
+        "func": "// Get System Stats function will be implemented here",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [
+            {
+                "var": "os",
+                "module": "os"
+            },
+            {
+                "var": "fs",
+                "module": "fs-extra"
+            }
+        ],
+        "x": 400,
+        "y": 102,
+        "wires": [
+            [
+                "9b132fd10521c736"
+            ]
+        ]
+    },
+    {
+        "id": "39b2acf1d5aff380",
+        "type": "ui_button",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Purge Old Data",
+        "group": "mongodb_controls",
+        "order": 4,
+        "width": 3,
+        "height": 1,
+        "passthru": false,
+        "label": "Purge Old Data (90+ days)",
+        "tooltip": "Purge data older than 90 days from all collections",
+        "color": "",
+        "bgcolor": "",
+        "icon": "fa-trash",
+        "payload": "90",
+        "payloadType": "num",
+        "topic": "purge-old-data",
+        "x": 118,
+        "y": 716,
+        "wires": [
+            [
+                "84943c2a8066cd53"
+            ]
+        ]
+    },
+    {
+        "id": "84943c2a8066cd53",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Init Batch Cleanup",
+        "func": "// Initialize batch cleanup process\nconst days = msg.payload || 90; // Default to 90 days\n\n// Pass the days threshold along\nmsg.payload = days;\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 248,
+        "y": 796,
+        "wires": [
+            [
+                "b7b9a401434bda59"
+            ]
+        ]
+    },
+    {
+        "id": "b7b9a401434bda59",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Prepare DBs Cleanup Query",
+        "func": "// Prepare admin command to get database list for cleanup\nmsg.mode = 'admin';\nmsg.operation = 'listDatabases';\nmsg.payload = {};\n\n// Store the threshold days for later use\nflow.set('cleanupThreshold', msg.payload || 90);\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 398,
+        "y": 736,
+        "wires": [
+            [
+                "675114ed1d5859fb"
+            ]
+        ]
+    },
+    {
+        "id": "675114ed1d5859fb",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Get DBs for Cleanup",
+        "x": 518,
+        "y": 796,
+        "wires": [
+            [
+                "06018f5bfde3ff3c"
+            ]
+        ]
+    },
+    {
+        "id": "06018f5bfde3ff3c",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Filter DBs for Cleanup",
+        "func": "// Filter database list and prepare for cleanup\nif (msg.payload && msg.payload.databases) {\n    // Filter out admin and config databases\n    const userDbs = msg.payload.databases.filter(db => \n        !['admin', 'config', 'local'].includes(db.name));\n    \n    // Get the threshold days\n    const threshold = flow.get('cleanupThreshold') || 90;\n    \n    // If we have databases to process\n    if (userDbs.length > 0) {\n        // Prepare to process the first database\n        const firstDb = userDbs[0].name;\n        const remainingDbs = userDbs.slice(1).map(db => db.name);\n        \n        // Send message to start processing the first database\n        return {\n            payload: {\n                action: 'cleanup',\n                database: firstDb,\n                threshold: threshold,\n                remainingDbs: remainingDbs\n            }\n        };\n    } else {\n        // No user databases found\n        return {\n            payload: {\n                result: 'no-databases',\n                message: 'No user databases found for cleanup'\n            }\n        };\n    }\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 698,
+        "y": 736,
+        "wires": [
+            [
+                "9f024c563ad9bf6a"
+            ]
+        ]
+    },
+    {
+        "id": "9f024c563ad9bf6a",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Prepare DB Cleanup",
+        "func": "// Prepare to get collections for a database\nif (msg.payload && msg.payload.action === 'cleanup' && msg.payload.database) {\n    const { database, threshold, remainingDbs } = msg.payload;\n    \n    // Store metadata for later use\n    flow.set('currentCleanupDb', database);\n    flow.set('cleanupThreshold', threshold);\n    flow.set('remainingCleanupDbs', remainingDbs || []);\n    \n    // Calculate threshold date\n    const thresholdDate = new Date();\n    thresholdDate.setDate(thresholdDate.getDate() - threshold);\n    flow.set('thresholdDate', thresholdDate);\n    \n    // Set up request to get collections for this database\n    msg.db = database;\n    msg.mode = 'db';\n    msg.operation = 'listCollections';\n    msg.payload = {};\n    \n    return msg;\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 818,
+        "y": 796,
+        "wires": [
+            [
+                "98b686c206aaa443"
+            ]
+        ]
+    },
+    {
+        "id": "98b686c206aaa443",
+        "type": "mongodb4",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "collection": "",
+        "operation": "",
+        "output": true,
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Get Collections",
+        "x": 978,
+        "y": 736,
+        "wires": [
+            [
+                "d598bece3a7ce82e"
+            ]
+        ]
+    },
+    {
+        "id": "d598bece3a7ce82e",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Process Collections for Cleanup",
+        "func": "// Process collections for cleanup\nif (Array.isArray(msg.payload)) {\n    const collections = msg.payload;\n    const dbName = flow.get('currentCleanupDb');\n    const threshold = flow.get('cleanupThreshold');\n    const remainingDbs = flow.get('remainingCleanupDbs') || [];\n    \n    // Get collection names\n    const collectionNames = collections.map(col => col.name);\n    \n    // If we have collections to process\n    if (collectionNames.length > 0) {\n        // Process the first collection\n        const firstCollection = collectionNames[0];\n        const remainingCollections = collectionNames.slice(1);\n        \n        // Send cleanup request for first collection\n        return {\n            payload: {\n                database: dbName,\n                collection: firstCollection,\n                cleanupType: 'age',\n                ageThreshold: threshold,\n                dryRun: false,\n                processingMeta: {\n                    remainingCollections: remainingCollections,\n                    remainingDbs: remainingDbs,\n                    threshold: threshold\n                }\n            }\n        };\n    } else {\n        // No collections in this database, move to next database\n        if (remainingDbs.length > 0) {\n            const nextDb = remainingDbs[0];\n            return {\n                payload: {\n                    action: 'cleanup',\n                    database: nextDb,\n                    threshold: threshold,\n                    remainingDbs: remainingDbs.slice(1)\n                }\n            };\n        } else {\n            // All done\n            return {\n                payload: {\n                    result: 'complete',\n                    message: 'Batch cleanup process completed'\n                }\n            };\n        }\n    }\n}\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1148,
+        "y": 796,
+        "wires": [
+            [
+                "835c1e0735c32871"
+            ]
+        ]
+    },
+    {
+        "id": "2506f9632aeb6805",
+        "type": "debug",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 580,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "pm2-service-0-toggle",
+        "type": "ui_switch",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "PM2 Service 0",
+        "label": "Service 0",
+        "tooltip": "Toggle PM2 Service 0",
+        "group": "pm2_controls_group",
+        "order": 1,
+        "width": 4,
+        "height": 1,
+        "passthru": true,
+        "decouple": "false",
+        "topic": "pm2/service/0",
+        "style": "",
+        "onvalue": "true",
+        "onvalueType": "bool",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "false",
+        "offvalueType": "bool",
+        "officon": "",
+        "offcolor": "",
+        "x": 750.9999923706055,
+        "y": 1004.0000534057617,
+        "wires": [
+            [
+                "pm2-service-0-handler"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-service-1-toggle",
+        "type": "ui_switch",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "PM2 Service 1",
+        "label": "Service 1",
+        "tooltip": "Toggle PM2 Service 1",
+        "group": "pm2_controls_group",
+        "order": 2,
+        "width": 4,
+        "height": 1,
+        "passthru": true,
+        "decouple": "false",
+        "topic": "pm2/service/1",
+        "topicType": "str",
+        "style": "",
+        "onvalue": "true",
+        "onvalueType": "bool",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "false",
+        "offvalueType": "bool",
+        "officon": "",
+        "offcolor": "",
+        "animate": true,
+        "className": "",
+        "x": 750.9999923706055,
+        "y": 1064.0000534057617,
+        "wires": [
+            [
+                "pm2-service-1-handler"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-service-6-toggle",
+        "type": "ui_switch",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "PM2 Service 2",
+        "label": "Service 2",
+        "tooltip": "Toggle PM2 Service 2",
+        "group": "pm2_controls_group",
+        "order": 3,
+        "width": 4,
+        "height": 1,
+        "passthru": true,
+        "decouple": "false",
+        "topic": "pm2/service/2",
+        "style": "",
+        "onvalue": "true",
+        "onvalueType": "bool",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "false",
+        "offvalueType": "bool",
+        "officon": "",
+        "offcolor": "",
+        "x": 750.9999923706055,
+        "y": 1124.0000534057617,
+        "wires": [
+            [
+                "pm2-service-6-handler"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-service-0-handler",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "PM2 Service 0 Control",
+        "func": "// Determine which command to execute based on toggle state\nconst serviceId = 0;\nconst isOn = msg.payload === true;\n\nmsg.serviceId = serviceId;\nmsg.command = isOn ? 'start' : 'stop';\n\n// Set the payload to the command to execute\nmsg.payload = `pm2 ${msg.command} ${serviceId}`;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 980.9999923706055,
+        "y": 1004.0000534057617,
+        "wires": [
+            [
+                "pm2-command-exec"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-service-1-handler",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "PM2 Service 1 Control",
+        "func": "// Determine which command to execute based on toggle state\nconst serviceId = 1;\nconst isOn = msg.payload === true;\n\nmsg.serviceId = serviceId;\nmsg.command = isOn ? 'logs' : 'restart';\n\n// Set the payload to the command to execute\nmsg.payload = `pm2 ${msg.command} ${serviceId}`;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 980.9999923706055,
+        "y": 1064.0000534057617,
+        "wires": [
+            [
+                "pm2-command-exec",
+                "5fd720b12345424c"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-service-6-handler",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "PM2 Service 2 Control",
+        "func": "// Determine which command to execute based on toggle state\nconst serviceId = 2;\nconst isOn = msg.payload === true;\n\nmsg.serviceId = serviceId;\nmsg.command = isOn ? 'start' : 'stop';\n\n// Set the payload to the command to execute\nmsg.payload = `pm2 ${msg.command} ${serviceId}`;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 980.9999923706055,
+        "y": 1124.0000534057617,
+        "wires": [
+            [
+                "pm2-command-exec",
+                "854837ba7be3e92d"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-command-exec",
+        "type": "exec",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "command": "",
+        "addpay": "payload",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "60",
+        "winHide": false,
+        "oldrc": false,
+        "name": "PM2",
+        "x": 1310,
+        "y": 1060,
+        "wires": [
+            [
+                "pm2-command-response"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "pm2-command-response",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Log Response",
+        "func": "// Extract the service info from the message\nconst serviceId = msg.serviceId;\nconst command = msg.command;\n\n// Log the PM2 command result\nnode.log(`PM2 service ${serviceId} ${command} command executed`);\n\n// Return a status message that can be displayed\nreturn {\n    topic: `pm2/service/${serviceId}/status`,\n    payload: `Service ${serviceId} ${command} command completed`,\n    serviceId: serviceId,\n    command: command\n};",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "// Code added here will be run once\n// whenever the node is started.\nlet msg = {}\nmsg.payload = \"All Here\"\nreturn msg",
+        "finalize": "",
+        "libs": [],
+        "x": 1490.9999923706055,
+        "y": 1064.0000534057617,
+        "wires": [
+            [
+                "pm2-status-display"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-status-display",
+        "type": "ui_text",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "group": "pm2_controls_group",
+        "order": 4,
+        "width": 12,
+        "height": 1,
+        "name": "PM2 Status",
+        "label": "Last Command Status",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "x": 1690.9999923706055,
+        "y": 1064.0000534057617,
+        "wires": []
+    },
+    {
+        "id": "pm2-monitor-trigger",
+        "type": "inject",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Check PM2 Status (Every 60 hour)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "216000",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "5",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 210.99999237060547,
+        "y": 1244.0000534057617,
+        "wires": [
+            [
+                "pm2-check-status"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-check-status",
+        "type": "exec",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "command": "pm2 jlist",
+        "addpay": false,
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "Get PM2 Status",
+        "x": 490.99999237060547,
+        "y": 1224.0000534057617,
+        "wires": [
+            [
+                "pm2-status-parser"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "pm2-status-parser",
+        "type": "function",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Parse PM2 Status",
+        "func": "// Parse the PM2 JSON list output\nlet pmData;\ntry {\n    pmData = JSON.parse(msg.payload);\n} catch (e) {\n    node.error('Failed to parse PM2 status output');\n    return null;\n}\n\n// Find services 0, 1, and 6\nconst targetIds = [0, 1, 6];\nconst serviceStatuses = {};\n\n// Process each PM2 service\nfor (const process of pmData) {\n    const pm_id = process.pm_id;\n    \n    // Check if this is one of our target services\n    if (targetIds.includes(pm_id)) {\n        // Get the online status (true if running, false otherwise)\n        const isRunning = process.pm2_env.status === 'online';\n        \n        // Create a message for each service switch\n        const serviceMsg = {\n            topic: `pm2/service/${pm_id}`,\n            payload: isRunning,\n            pm_id: pm_id\n        };\n        \n        // Store the service status\n        serviceStatuses[pm_id] = serviceMsg;\n    }\n}\n\n// Create an array of messages to send (one for each service)\nconst messages = Object.values(serviceStatuses);\n\n// Return all messages\nreturn [messages];\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 700.9999923706055,
+        "y": 1224.0000534057617,
+        "wires": [
+            [
+                "pm2-update-switches"
+            ]
+        ]
+    },
+    {
+        "id": "pm2-update-switches",
+        "type": "switch",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "Route to Correct Switch",
+        "property": "pm_id",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "0",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "num"
+            },
+            {
+                "t": "eq",
+                "v": "6",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 3,
+        "x": 520.9999923706055,
+        "y": 1084.0000534057617,
+        "wires": [
+            [],
+            [
+                "pm2-service-1-toggle"
+            ],
+            [
+                "pm2-service-6-toggle"
+            ]
+        ]
+    },
+    {
+        "id": "5fd720b12345424c",
+        "type": "debug",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "pm2 mqtt broker control",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 1115.9999923706055,
+        "y": 1044.0000534057617,
+        "wires": [],
+        "l": false
+    },
+    {
+        "id": "854837ba7be3e92d",
+        "type": "debug",
+        "z": "3a50580c0c8a32b7",
+        "d": true,
+        "name": "pm2 mcp control",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 1115.9999923706055,
+        "y": 1104.0000534057617,
+        "wires": [],
+        "l": false
+    },
+    {
+        "id": "cc38bf3de28e7393",
+        "type": "mongodb4-client",
+        "name": "DVTdata",
+        "protocol": "mongodb",
+        "hostname": "127.0.0.1",
+        "port": "27017",
+        "dbName": "DVTdata",
+        "appName": "",
+        "authSource": "",
+        "authMechanism": "DEFAULT",
+        "tls": false,
+        "tlsCAFile": "",
+        "tlsCertificateKeyFile": "",
+        "tlsInsecure": false,
+        "connectTimeoutMS": "",
+        "socketTimeoutMS": "",
+        "minPoolSize": "",
+        "maxPoolSize": "",
+        "maxIdleTimeMS": "",
+        "uri": "",
+        "advanced": "",
+        "uriTabActive": "tab-uri-simple"
+    },
+    {
+        "id": "mongodb_controls",
+        "type": "ui_group",
+        "name": "MongoDB Controls",
+        "tab": "mongodb_tab",
+        "order": 2,
+        "disp": true,
+        "width": "20",
+        "collapse": false
+    },
+    {
+        "id": "pm2_controls_group",
+        "type": "ui_group",
+        "name": "PM2 Service Controls",
+        "tab": "device_status_tab",
+        "order": 3,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "mongodb_tab",
+        "type": "ui_tab",
+        "name": "MongoDB Management",
+        "icon": "database",
+        "order": 10,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "device_status_tab",
+        "type": "ui_tab",
+        "name": "Device Status Dashboard",
+        "icon": "dashboard",
+        "order": 12,
+        "disabled": false,
+        "hidden": false
+    }
+]

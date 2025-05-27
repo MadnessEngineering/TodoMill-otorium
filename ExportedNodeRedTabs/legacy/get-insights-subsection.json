@@ -1,0 +1,275 @@
+[
+    {
+        "id": "e4a65e9fb61229b9",
+        "type": "group",
+        "z": "e890cb64b583ae67",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "7512a5cbac0343f5",
+            "b446d06b5fa4c934",
+            "377e0c4d336d3db2",
+            "a422bca90941ac16",
+            "7d77c5b75217dbf4",
+            "3efd1f5dff848d65",
+            "f9f9f713613236e2",
+            "f6a49fba95a4ba5f",
+            "3391269a0dd9f559",
+            "c57d98e84ba3bf45"
+        ],
+        "x": 724,
+        "y": 799,
+        "w": 1242,
+        "h": 122
+    },
+    {
+        "id": "7512a5cbac0343f5",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "handle-ai-errors",
+        "func": "// This function handles errors that might occur during AI API calls\n// and provides a graceful fallback\n\n// Check if we have an error message\nif (!msg.error && (!msg.payload || !msg.payload.status || msg.payload.status !== \"error\"))\n{\n    // No error detected, pass through the message unchanged\n    return msg;\n}\n\n// Extract error information\nconst errorMessage = msg.error ? msg.error.message :\n    (msg.payload && msg.payload.message ? msg.payload.message : \"Unknown error\");\n\n// Get the original todo information if available\nconst todo = msg.todo || {};\n\n// Create a fallback response with basic suggestions instead of AI insights\nconst fallbackResponse = {\n    todo: {\n        id: todo.id || \"unknown\",\n        description: todo.description || \"Unknown task\",\n        current_priority: todo.priority || \"medium\",\n        status: todo.status || \"pending\"\n    },\n    ai_insights: {\n        content: `AI insights temporarily unavailable. Please try again later.\\n\\nError: ${errorMessage}`,\n        generated_at: new Date().toISOString(),\n        model: \"fallback\",\n        is_fallback: true\n    },\n    suggestions: {\n        suggested_priority: todo.priority || \"medium\",\n        estimated_completion_time: 60, // Default to 1 hour\n        automation_confidence: 0\n    },\n    error: {\n        message: errorMessage,\n        timestamp: new Date().toISOString()\n    }\n};\n\n// Return the fallback response\nreturn {\n    payload: fallbackResponse,\n    topic: \"todo/dashboard/insights\",\n    error_logged: true\n}; \n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1560,
+        "y": 880,
+        "wires": [
+            [
+                "a422bca90941ac16",
+                "3391269a0dd9f559"
+            ]
+        ],
+        "outputLabels": [
+            "dashboard-pub"
+        ],
+        "icon": "node-red/alert.svg"
+    },
+    {
+        "id": "b446d06b5fa4c934",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "get-insights",
+        "func": "// Get the todo ID from the payload\nconst todoId = msg.payload.id;\n\nif (!todoId)\n{\n    return {\n        payload: {\n            status: \"error\",\n            message: \"No todo ID provided\"\n        },\n        topic: \"todo/dashboard/error\"\n    };\n}\n\n// Log the request for debugging\nnode.warn(`Getting AI insights for todo ID: ${todoId}`);\n\n// First we need to fetch the todo from MongoDB to get its data\nreturn {\n    payload: {\n        // Query for MongoDB4 node format\n        filter: { id: todoId }\n    },\n    topic: \"todo/action/get_todo_for_insights\",\n    collection: \"todos\",\n    debug: {\n        request_id: `ai_insights_${Date.now()}`,\n        timestamp: new Date().toISOString(),\n        todo_id: todoId\n    }\n}; \n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 870,
+        "y": 860,
+        "wires": [
+            [
+                "a422bca90941ac16",
+                "377e0c4d336d3db2"
+            ]
+        ]
+    },
+    {
+        "id": "377e0c4d336d3db2",
+        "type": "mongodb4",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "clientNode": "1cdab81a6028b016",
+        "mode": "collection",
+        "collection": "",
+        "operation": "find",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "DB-FindTodo",
+        "x": 1030,
+        "y": 860,
+        "wires": [
+            [
+                "7d77c5b75217dbf4"
+            ]
+        ]
+    },
+    {
+        "id": "a422bca90941ac16",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "cache-ai-insights",
+        "func": "// This function caches AI insights to reduce repeated API calls\n// Uses Node-RED global context to store the cache\n\n// Initialize the cache if it doesn't exist\nconst cache = global.get(\"aiInsightsCache\") || {};\n\n// Add a timestamp to the cache\nconst now = Date.now();\n\n// Check if we're storing or retrieving from the cache\nif (msg.topic === \"todo/action/get_todo_for_insights\")\n{\n    const todoId = msg.payload && msg.payload.filter && msg.payload.filter.id;\n\n    if (!todoId)\n    {\n        // No ID to check cache, pass through\n        return msg;\n    }\n\n    // Check if we have a recent cache entry (less than 30 minutes old)\n    if (cache[todoId] &&\n        cache[todoId].timestamp &&\n        (now - cache[todoId].timestamp < 30 * 60 * 1000))\n    {\n\n        // We have a recent cache hit, return the cached insights\n        return {\n            payload: cache[todoId].data,\n            topic: \"todo/dashboard/insights\",\n            cached: true\n        };\n    }\n\n    // No cache hit or cache expired, continue with API call\n    return msg;\n} else if (msg.topic === \"todo/dashboard/insights\" && !msg.cached)\n{\n    // We're receiving new insights, store them in the cache\n    const todoId = msg.payload && msg.payload.todo && msg.payload.todo.id;\n\n    if (todoId)\n    {\n        // Store the result in the cache with a timestamp\n        cache[todoId] = {\n            data: msg.payload,\n            timestamp: now\n        };\n\n        // Prune old entries (older than 2 hours)\n        Object.keys(cache).forEach(key =>\n        {\n            if (now - cache[key].timestamp > 2 * 60 * 60 * 1000)\n            {\n                delete cache[key];\n            }\n        });\n\n        // Update the global cache\n        global.set(\"aiInsightsCache\", cache);\n    }\n\n    // Pass through the message\n    return msg;\n} else\n{\n    // Any other message type, just pass through\n    return msg;\n} \n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1770,
+        "y": 880,
+        "wires": [
+            [
+                "3391269a0dd9f559"
+            ]
+        ]
+    },
+    {
+        "id": "7d77c5b75217dbf4",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "prepare-ai-request",
+        "func": "// This node prepares the HTTP request for the AI API\n// It formats the message from the get-todo-for-insights node\n\n// Check if we have valid todo data from MongoDB\nif (!msg.payload || !Array.isArray(msg.payload) || msg.payload.length === 0) {\n    return {\n        payload: {\n            status: \"error\",\n            message: \"Todo not found\"\n        },\n        topic: \"todo/dashboard/error\"\n    };\n}\n\n// Get the first todo from the results\nconst todo = msg.payload[0];\n\n// Save the original todo in the message for later use\nmsg.todo = todo;\n\n// Prepare the prompt for the AI\nconst prompt = `Analyze this task and provide insights:\\n\\nTask: ${todo.description}\\nPriority: ${todo.priority || 'medium'}\\nStatus: ${todo.status || 'pending'}\\nProject: ${todo.project || 'Unknown'}\\n\\nPlease provide:\\n1. One sentence analysis of what this task involves\\n2. Suggested resources or approaches\\n3. Estimated effort level\\n4. A unique insight to help complete this efficiently`;\n\n// Prepare the payload for the API request\nmsg.payload = {\n    model: \"qwen2.5-7b-instruct\",\n    messages: [\n        {\n            role: \"user\",\n            content: prompt\n        }\n    ]\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1190,
+        "y": 860,
+        "wires": [
+            [
+                "3efd1f5dff848d65"
+            ]
+        ]
+    },
+    {
+        "id": "3efd1f5dff848d65",
+        "type": "http request",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "Call AI API",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://REPLACE_WITH_AI_API_URL:3007/v1/chat/completions",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": true,
+        "headers": [
+            {
+                "keyType": "Content-Type",
+                "keyValue": "",
+                "valueType": "application/json",
+                "valueValue": ""
+            }
+        ],
+        "x": 1350,
+        "y": 860,
+        "wires": [
+            [
+                "f9f9f713613236e2"
+            ]
+        ]
+    },
+    {
+        "id": "f9f9f713613236e2",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "process-ai-response",
+        "func": "// This node processes the response from the AI API endpoint\n// and prepares it for the final processing step\n\n// Check if we have a valid payload\nif (!msg.payload) {\n    return {\n        payload: {\n            status: \"error\",\n            message: \"No AI response received\"\n        },\n        topic: \"todo/dashboard/error\"\n    };\n}\n\n// Get the original todo that we passed through\nconst todo = msg.todo || {};\n\n// Parse the response if it's a string\nlet apiResponse;\nif (typeof msg.payload === 'string') {\n    try {\n        apiResponse = JSON.parse(msg.payload);\n    } catch (error) {\n        return {\n            payload: {\n                status: \"error\",\n                message: \"Failed to parse AI response: \" + error.message,\n                raw_response: msg.payload\n            },\n            topic: \"todo/dashboard/error\"\n        };\n    }\n} else {\n    apiResponse = msg.payload;\n}\n\n// Extract the AI content from the response\nconst aiContent = apiResponse.choices && \n                  apiResponse.choices[0] && \n                  apiResponse.choices[0].message && \n                  apiResponse.choices[0].message.content;\n\nif (!aiContent) {\n    return {\n        payload: {\n            status: \"error\",\n            message: \"Invalid AI response format\",\n            raw_response: apiResponse\n        },\n        topic: \"todo/dashboard/error\"\n    };\n}\n\n// Format the response for display\nconst formattedResponse = {\n    todo: {\n        id: todo.id || \"unknown\",\n        description: todo.description || \"Unknown task\",\n        current_priority: todo.priority || \"medium\",\n        status: todo.status || \"pending\"\n    },\n    ai_insights: {\n        content: aiContent,\n        generated_at: new Date().toISOString(),\n        model: apiResponse.model || \"qwen2.5-7b-instruct\"\n    },\n    suggestions: {\n        suggested_priority: todo.priority || \"medium\",\n        estimated_completion_time: 60, // Default to 1 hour\n        automation_confidence: 75\n    }\n};\n\n// Send the formatted response\nmsg.payload = formattedResponse;\nmsg.topic = \"todo/dashboard/insights\";\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1560,
+        "y": 840,
+        "wires": [
+            [
+                "f6a49fba95a4ba5f"
+            ]
+        ]
+    },
+    {
+        "id": "f6a49fba95a4ba5f",
+        "type": "function",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "format-ai-insights",
+        "func": "// This function formats the AI insights for display in the dashboard\n// It takes the raw AI response and makes it more presentation-friendly\n\nif (!msg.payload || !msg.payload.ai_insights)\n{\n    return {\n        payload: {\n            status: \"error\",\n            message: \"No AI insights data found\"\n        },\n        topic: \"todo/dashboard/error\"\n    };\n}\n\n// Get the AI content\nlet aiContent = msg.payload.ai_insights.content;\n\n// Format the content for better display\n// Convert numbered lists to HTML lists if not already formatted\nif (aiContent.match(/^\\d+\\.\\s/gm))\n{\n    // Content has numbered points but probably not formatted as HTML\n    const formattedContent = aiContent.replace(\n        /(\\d+)\\.\\s+(.*?)(?=(?:\\n\\d+\\.|$))/gs,\n        (match, number, text) =>\n        {\n            return `<div class=\"ai-insight-point\"><span class=\"ai-point-number\">${number}.</span> ${text.trim()}</div>`;\n        }\n    );\n\n    msg.payload.ai_insights.content = formattedContent;\n}\n\n// Format bullet points\nif (aiContent.match(/^[•*-]\\s/gm))\n{\n    const formattedContent = aiContent.replace(\n        /[•*-]\\s+(.*?)(?=(?:\\n[•*-]|$))/gs,\n        (match, text) =>\n        {\n            return `<div class=\"ai-insight-bullet\"><span class=\"ai-bullet-point\">•</span> ${text.trim()}</div>`;\n        }\n    );\n\n    msg.payload.ai_insights.content = formattedContent;\n}\n\n// Add additional styling for the AI insights content\nmsg.payload.ai_insights.css = `\n.ai-insight-point, .ai-insight-bullet {\n    margin-bottom: 8px;\n    display: flex;\n}\n\n.ai-point-number, .ai-bullet-point {\n    margin-right: 8px;\n    font-weight: bold;\n    color: #4285f4;\n}\n\n.ai-insights-content h3 {\n    margin-top: 10px;\n    color: #333;\n    font-size: 1em;\n}\n`;\n\nreturn msg; \n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1770,
+        "y": 840,
+        "wires": [
+            [
+                "7512a5cbac0343f5",
+                "3391269a0dd9f559"
+            ]
+        ],
+        "outputLabels": [
+            "dashboard-pub"
+        ]
+    },
+    {
+        "id": "3391269a0dd9f559",
+        "type": "link out",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "dashboard-pub",
+        "mode": "link",
+        "links": [
+            "8d670b8299f89a5b"
+        ],
+        "x": 1925,
+        "y": 860,
+        "wires": []
+    },
+    {
+        "id": "c57d98e84ba3bf45",
+        "type": "link in",
+        "z": "e890cb64b583ae67",
+        "g": "e4a65e9fb61229b9",
+        "name": "insights-sub",
+        "links": [
+            "c843d2925e0307cb"
+        ],
+        "x": 765,
+        "y": 860,
+        "wires": [
+            [
+                "b446d06b5fa4c934"
+            ]
+        ]
+    },
+    {
+        "id": "1cdab81a6028b016",
+        "type": "mongodb4-client",
+        "name": "swarmonomicon",
+        "protocol": "mongodb",
+        "hostname": "127.0.0.1",
+        "port": "",
+        "dbName": "swarmonomicon",
+        "appName": "",
+        "authSource": "",
+        "authMechanism": "DEFAULT",
+        "tls": false,
+        "tlsCAFile": "",
+        "tlsCertificateKeyFile": "",
+        "tlsInsecure": false,
+        "connectTimeoutMS": "30000",
+        "socketTimeoutMS": "0",
+        "minPoolSize": "0",
+        "maxPoolSize": "100",
+        "maxIdleTimeMS": "0",
+        "uri": "",
+        "advanced": "{}",
+        "uriTabActive": "tab-uri-simple"
+    }
+]
