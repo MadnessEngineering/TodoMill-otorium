@@ -1,0 +1,73 @@
+<!-- MongoDB CLI Update Node for Node-RED -->
+<script type="text/javascript">
+    RED.nodes.registerType('mongo-cli-update', {
+        category: 'database',
+        color: '#89bf04',
+        defaults: {
+            name: { value: "" }
+        },
+        inputs: 1,
+        outputs: 2,
+        outputLabels: ["result", "refresh trigger"],
+        icon: "db.svg",
+        label: function() {
+            return this.name || "Mongo CLI Update";
+        },
+        paletteLabel: "Mongo CLI Update"
+    });
+</script>
+
+<script type="text/html" data-template-name="mongo-cli-update">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="mongo-cli-update">
+    <p>A node that directly executes MongoDB CLI commands to update todos.</p>
+    
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload
+            <span class="property-type">object</span>
+        </dt>
+        <dd>
+            <p>The todo update payload with one of these formats:</p>
+            <ul>
+                <li><code>{ id: "todo-id", field: "field-name", value: "new-value" }</code> - for single field update</li>
+                <li><code>{ id: "todo-id", updates: { field1: "value1", field2: "value2", ... } }</code> - for multiple field updates</li>
+            </ul>
+        </dd>
+    </dl>
+    
+    <h3>Outputs</h3>
+    <ol class="node-ports">
+        <li>Standard output
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">object</span></dt>
+                <dd>The MongoDB CLI result with status, result and updated fields</dd>
+            </dl>
+        </li>
+        <li>Refresh trigger
+            <dl class="message-properties">
+                <dt>topic <span class="property-type">string</span></dt>
+                <dd><code>todo/action/refresh_todos</code></dd>
+                <dt>payload <span class="property-type">number</span></dt>
+                <dd>Value 1 to trigger a refresh</dd>
+            </dl>
+        </li>
+    </ol>
+    
+    <h3>Details</h3>
+    <p>This node executes a MongoDB CLI command using the <code>mongosh</code> executable to update todo items directly in the database.</p>
+    <p>It includes special handling for date fields:</p>
+    <ul>
+        <li>Converts date strings in YYYY-MM-DD format to Unix timestamps</li>
+        <li>Automatically adds last_modified timestamp</li>
+        <li>Automatically adds completed_at timestamp when status is set to "completed"</li>
+    </ul>
+    
+    <h3>Requirements</h3>
+    <p>The mongosh executable must be available on the system PATH.</p>
+</script> 

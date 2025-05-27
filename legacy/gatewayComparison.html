@@ -1,0 +1,470 @@
+[
+    {
+        "id": "6c831edb8e424ac6",
+        "type": "tab",
+        "label": "Gateway Comparison Dashboard",
+        "disabled": false,
+        "info": "A dashboard to compare statistics from 4 gateways"
+    },
+    {
+        "id": "b0735fee63f6e48b",
+        "type": "mongodb4",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "mode": "collection",
+        "collection": "gateway_metrics",
+        "operation": "find",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Fetch Gateway Stats",
+        "x": 180,
+        "y": 100,
+        "wires": [
+            [
+                "e937d0c333fbc577"
+            ]
+        ]
+    },
+    {
+        "id": "e937d0c333fbc577",
+        "type": "function",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Process Gateway Data",
+        "func": "// Group data by gateway ID\nconst gatewayMap = {};\n\n// Process each document from MongoDB\nmsg.payload.forEach(doc => {\n    const gatewayId = doc.gateway_id;\n    \n    if (!gatewayMap[gatewayId]) {\n        gatewayMap[gatewayId] = [];\n    }\n    \n    // Add the document to the gateway's data array\n    gatewayMap[gatewayId].push({\n        timestamp: new Date(doc.timestamp),\n        dataPoints: doc.dataPoints,\n        elements: doc.elements,\n        sensorTypes: doc.sensorTypes || {}\n    });\n});\n\n// Sort each gateway's data by timestamp (newest first)\nObject.keys(gatewayMap).forEach(gatewayId => {\n    gatewayMap[gatewayId].sort((a, b) => b.timestamp - a.timestamp);\n});\n\n// Store in flow context\nflow.set('gateways', gatewayMap);\n\n// Prepare data for the dashboard\nconst gatewayIds = Object.keys(gatewayMap);\nconst dashboardData = [];\n\n// Get the latest data for each gateway (up to 4 gateways)\ngatewayIds.slice(0, 4).forEach(id => {\n    if (gatewayMap[id].length > 0) {\n        const latest = gatewayMap[id][0];\n        dashboardData.push({\n            gateway_id: id,\n            last_update: latest.timestamp,\n            data_points: latest.dataPoints,\n            elements: latest.elements,\n            sensor_count: Object.keys(latest.sensorTypes).length\n        });\n    }\n});\n\n// Prepare chart data for the last 20 data points\nconst chartData = {\n    labels: [],\n    datasets: gatewayIds.slice(0, 4).map((id, index) => {\n        return {\n            label: id,\n            data: [],\n            fill: false,\n            borderColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'][index % 4]\n        };\n    })\n};\n\n// Get timestamps for the chart (use the first gateway's timestamps)\nconst maxPoints = 20;\nif (gatewayIds.length > 0 && gatewayMap[gatewayIds[0]].length > 0) {\n    // Get timestamps from the first gateway (up to maxPoints)\n    const timestamps = gatewayMap[gatewayIds[0]]\n        .slice(0, maxPoints)\n        .map(entry => new Date(entry.timestamp).toLocaleTimeString());\n    \n    chartData.labels = timestamps;\n    \n    // Fill in data for each gateway\n    gatewayIds.slice(0, 4).forEach((id, gatewayIndex) => {\n        const gatewayData = gatewayMap[id].slice(0, maxPoints);\n        const dataPoints = gatewayData.map(entry => entry.dataPoints);\n        chartData.datasets[gatewayIndex].data = dataPoints;\n    });\n}\n\nreturn [\n    { payload: dashboardData },\n    { payload: chartData }\n];",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 100,
+        "wires": [
+            [
+                "c16dc187e2151aca"
+            ],
+            [
+                "8aa4db88dd137387"
+            ]
+        ]
+    },
+    {
+        "id": "c16dc187e2151aca",
+        "type": "ui_template",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "group": "dashboard_group",
+        "name": "Custom Gateway Table",
+        "order": 1,
+        "width": "12",
+        "height": "5",
+        "format": "<style>\n    .gateway-table {\n        width: 100%;\n        border-collapse: collapse;\n        margin-bottom: 20px;\n        font-family: Arial, sans-serif;\n    }\n    .gateway-table th {\n        background-color: #2196F3;\n        color: white;\n        text-align: left;\n        padding: 10px;\n        font-weight: bold;\n    }\n    .gateway-table td {\n        padding: 8px 10px;\n        border-bottom: 1px solid #ddd;\n    }\n    .gateway-table tr:nth-child(even) {\n        background-color: #f2f2f2;\n    }\n    .gateway-table tr:hover {\n        background-color: #e6f7ff;\n    }\n</style>\n\n<div>\n    <h3>Gateway Comparison</h3>\n    <table class=\"gateway-table\">\n        <thead>\n            <tr>\n                <th style=\"width: 30%\">Gateway ID</th>\n                <th style=\"width: 20%\">Last Update</th>\n                <th style=\"width: 15%\">Data Points</th>\n                <th style=\"width: 15%\">Elements</th>\n                <th style=\"width: 15%\">Sensor Types</th>\n            </tr>\n        </thead>\n        <tbody>\n            <tr ng-repeat=\"gateway in msg.payload\">\n                <td>{{gateway.gateway_id}}</td>\n                <td>{{gateway.last_update | date:'medium'}}</td>\n                <td>{{gateway.data_points}}</td>\n                <td>{{gateway.elements}}</td>\n                <td>{{gateway.sensor_count}}</td>\n            </tr>\n            <tr ng-if=\"!msg.payload || msg.payload.length === 0\">\n                <td colspan=\"5\" style=\"text-align: center;\">No gateway data available</td>\n            </tr>\n        </tbody>\n    </table>\n</div>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "x": 570,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "8aa4db88dd137387",
+        "type": "ui_chart",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Data Points Over Time",
+        "group": "dashboard_group",
+        "order": 2,
+        "width": "12",
+        "height": "6",
+        "label": "Data Points",
+        "chartType": "line",
+        "legend": "true",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "Waiting for data...",
+        "dot": false,
+        "ymin": "",
+        "ymax": "",
+        "removeOlder": "10",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "60",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1F77B4",
+            "#AEC7E8",
+            "#FF7F0E",
+            "#2CA02C"
+        ],
+        "outputs": 1,
+        "x": 570,
+        "y": 140,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "6884e116b5b756c7",
+        "type": "ui_button",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Refresh Data",
+        "group": "dashboard_group",
+        "order": 3,
+        "width": "4",
+        "height": "1",
+        "passthru": false,
+        "label": "Refresh",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "icon": "refresh",
+        "payload": "{}",
+        "payloadType": "json",
+        "topic": "refresh",
+        "x": 150,
+        "y": 180,
+        "wires": [
+            [
+                "b0735fee63f6e48b"
+            ]
+        ]
+    },
+    {
+        "id": "f5f4bf9f47a6e609",
+        "type": "ui_dropdown",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Select Gateway",
+        "label": "Select Gateway for Details",
+        "tooltip": "",
+        "place": "Select gateway",
+        "group": "dashboard_group",
+        "order": 5,
+        "width": "4",
+        "height": "1",
+        "passthru": true,
+        "multiple": false,
+        "options": [],
+        "payload": "",
+        "topic": "topic",
+        "x": 160,
+        "y": 300,
+        "wires": [
+            [
+                "f1d15b88a78bad7a"
+            ]
+        ]
+    },
+    {
+        "id": "f1d15b88a78bad7a",
+        "type": "function",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Get Gateway Details",
+        "func": "// Get selected gateway ID\nconst selectedGateway = msg.payload;\n\n// Get stored gateway data\nconst gateways = flow.get('gateways') || {};\n\n// If no gateway selected or gateway not found, return empty\nif (!selectedGateway || !gateways[selectedGateway]) {\n    return { payload: \"No data available for selected gateway\" };\n}\n\n// Get the latest data for the selected gateway\nconst gatewayData = gateways[selectedGateway][0];\n\n// Format the data for display\nlet detailsText = `<h2>Gateway Details: ${selectedGateway}</h2>`;\ndetailsText += `<p><strong>Last Update:</strong> ${new Date(gatewayData.timestamp).toLocaleString()}</p>`;\ndetailsText += `<p><strong>Data Points:</strong> ${gatewayData.dataPoints}</p>`;\ndetailsText += `<p><strong>Elements:</strong> ${gatewayData.elements}</p>`;\n\n// Add sensor type information\ndetailsText += `<h3>Sensor Types:</h3>`;\ndetailsText += `<ul>`;\nif (gatewayData.sensorTypes) {\n    Object.keys(gatewayData.sensorTypes).forEach(sensorType => {\n        const sensor = gatewayData.sensorTypes[sensorType];\n        detailsText += `<li><strong>${sensorType}:</strong> ${sensor.count} sensors, last update: ${new Date(sensor.lastUpdate).toLocaleString()}</li>`;\n    });\n}\ndetailsText += `</ul>`;\n\n// Add MAC addresses if available\nif (msg.payload.mac_addresses && msg.payload.mac_addresses.length > 0) {\n    detailsText += `<h3>MAC Addresses:</h3>`;\n    detailsText += `<ul style=\"max-height: 200px; overflow-y: auto;\">`;\n    msg.payload.mac_addresses.forEach((mac, index) => {\n        detailsText += `<li>${index}: ${mac}</li>`;\n    });\n    detailsText += `</ul>`;\n}\n\nreturn { payload: detailsText };",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 360,
+        "y": 300,
+        "wires": [
+            [
+                "9075191592578ff6"
+            ]
+        ]
+    },
+    {
+        "id": "9075191592578ff6",
+        "type": "ui_template",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "group": "dashboard_group",
+        "name": "Gateway Details Display",
+        "order": 6,
+        "width": "12",
+        "height": "6",
+        "format": "<div ng-bind-html=\"msg.payload\"></div>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "x": 580,
+        "y": 300,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "70249bf53c292f2a",
+        "type": "function",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Update Gateway Selector",
+        "func": "// Get stored gateway data\nconst gateways = flow.get('gateways') || {};\n\n// Get gateway IDs\nconst gatewayIds = Object.keys(gateways);\n\n// Format options for dropdown\nconst options = gatewayIds.map(id => {\n    return { value: id, label: id };\n});\n\n// Update the dropdown options\nreturn { payload: options };",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 360,
+        "wires": [
+            [
+                "f5f4bf9f47a6e609"
+            ]
+        ]
+    },
+    {
+        "id": "0f4cfc9bb9585b9f",
+        "type": "inject",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Update Selector (30s)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 180,
+        "y": 360,
+        "wires": [
+            [
+                "70249bf53c292f2a"
+            ]
+        ]
+    },
+    {
+        "id": "e7f54c2554a180fd",
+        "type": "mongodb4",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "mode": "collection",
+        "collection": "gateway_metrics",
+        "operation": "find",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Fetch Gateway Details",
+        "x": 360,
+        "y": 240,
+        "wires": [
+            [
+                "f1d15b88a78bad7a"
+            ]
+        ]
+    },
+    {
+        "id": "307b4c13853940bb",
+        "type": "function",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Prepare Gateway Query",
+        "func": "// Get the selected gateway ID\nconst gatewayId = msg.payload;\n\n// Create a query to find the latest document for this gateway\nmsg.payload = {\n    query: { gateway_id: gatewayId },\n    options: {\n        sort: { timestamp: -1 },\n        limit: 1\n    }\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 170,
+        "y": 240,
+        "wires": [
+            [
+                "e7f54c2554a180fd"
+            ]
+        ]
+    },
+    {
+        "id": "0a2733c08533643a",
+        "type": "inject",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Auto Refresh (60s)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "60",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 170,
+        "y": 60,
+        "wires": [
+            [
+                "b0735fee63f6e48b"
+            ]
+        ]
+    },
+    {
+        "id": "fbf041d8fdc4c27b",
+        "type": "mongodb4",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "clientNode": "cc38bf3de28e7393",
+        "mode": "collection",
+        "collection": "gateway_metrics",
+        "operation": "find",
+        "maxTimeMS": "",
+        "handleDocId": false,
+        "name": "Fetch Gateway Stats",
+        "x": 220,
+        "y": 540,
+        "wires": [
+            [
+                "e0da4b9344f5c154"
+            ]
+        ]
+    },
+    {
+        "id": "e0da4b9344f5c154",
+        "type": "function",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Process Bubble Data",
+        "func": "// Group data by gateway ID\nconst gatewayMap = {};\n\n// Process each document from MongoDB\nmsg.payload.forEach(doc => {\n    const gatewayId = doc.gateway_id;\n    \n    if (!gatewayMap[gatewayId]) {\n        gatewayMap[gatewayId] = {\n            elements: doc.elements,\n            dataPoints: doc.dataPoints,\n            timestamp: new Date(doc.timestamp)\n        };\n    } else if (new Date(doc.timestamp) > gatewayMap[gatewayId].timestamp) {\n        // Update if this is a more recent record\n        gatewayMap[gatewayId] = {\n            elements: doc.elements,\n            dataPoints: doc.dataPoints,\n            timestamp: new Date(doc.timestamp)\n        };\n    }\n});\n\n// Convert to bubble chart data\nconst bubbleData = {\n    datasets: [{\n        label: 'Gateway Elements',\n        data: Object.entries(gatewayMap).map(([id, data], index) => ({\n            x: index, // x-position for spacing\n            y: data.dataPoints, // y-axis shows dataPoints\n            r: Math.sqrt(data.elements) * 5, // bubble size based on elements (sqrt for better visualization)\n            gatewayId: id, // custom data for tooltip\n            elements: data.elements,\n            timestamp: data.timestamp\n        })),\n        backgroundColor: Object.keys(gatewayMap).map((_, i) => {\n            // Generate different colors for each gateway\n            const colors = [\n                'rgba(255, 99, 132, 0.6)',\n                'rgba(54, 162, 235, 0.6)',\n                'rgba(255, 206, 86, 0.6)',\n                'rgba(75, 192, 192, 0.6)',\n                'rgba(153, 102, 255, 0.6)',\n                'rgba(255, 159, 64, 0.6)'\n            ];\n            return colors[i % colors.length];\n        })\n    }]\n};\n\n// Configuration for the bubble chart\nconst config = {\n    type: 'bubble',\n    options: {\n        responsive: true,\n        plugins: {\n            title: {\n                display: true,\n                text: 'Gateway Elements Visualization'\n            },\n            tooltip: {\n                callbacks: {\n                    label: function(context) {\n                        const data = context.raw;\n                        return [\n                            `Gateway: ${data.gatewayId}`,\n                            `Elements: ${data.elements}`,\n                            `Data Points: ${data.y}`,\n                            `Last Update: ${data.timestamp.toLocaleString()}`\n                        ];\n                    }\n                }\n            }\n        },\n        scales: {\n            x: {\n                title: {\n                    display: true,\n                    text: 'Gateways'\n                },\n                ticks: {\n                    callback: function(value) {\n                        // Show gateway IDs as x-axis labels\n                        const gateways = Object.keys(gatewayMap);\n                        return gateways[value] || '';\n                    }\n                }\n            },\n            y: {\n                title: {\n                    display: true,\n                    text: 'Data Points'\n                }\n            }\n        }\n    }\n};\n\n// Store gateway data in flow context for other nodes\nflow.set('gateways', gatewayMap);\n\n// Send both data and config to the chart\nmsg.payload = {\n    data: bubbleData,\n    config: config\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 440,
+        "y": 540,
+        "wires": [
+            [
+                "7d94ce1012ee9c2f"
+            ]
+        ]
+    },
+    {
+        "id": "7d94ce1012ee9c2f",
+        "type": "chartjs-bubble",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Gateway Bubbles",
+        "path": "gateway-bubbles",
+        "charttitle": "Gateway Elements Visualization",
+        "xaxis": "Gateways",
+        "yaxis": "Data Points",
+        "x": 660,
+        "y": 540,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "242c4b3cc9c0cb59",
+        "type": "inject",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Auto Refresh (60s)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "60",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 210,
+        "y": 480,
+        "wires": [
+            [
+                "fbf041d8fdc4c27b"
+            ]
+        ]
+    },
+    {
+        "id": "92812bafae68bb5d",
+        "type": "ui_button",
+        "z": "6c831edb8e424ac6",
+        "d": true,
+        "name": "Refresh Data",
+        "group": "dashboard_group",
+        "order": 3,
+        "width": "4",
+        "height": "1",
+        "passthru": false,
+        "label": "Refresh",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "icon": "refresh",
+        "payload": "{}",
+        "payloadType": "json",
+        "topic": "refresh",
+        "x": 210,
+        "y": 600,
+        "wires": [
+            [
+                "fbf041d8fdc4c27b"
+            ]
+        ]
+    },
+    {
+        "id": "cc38bf3de28e7393",
+        "type": "mongodb4-client",
+        "name": "DVTdata",
+        "protocol": "mongodb",
+        "hostname": "127.0.0.1",
+        "port": "27017",
+        "dbName": "DVTdata",
+        "appName": "",
+        "authSource": "",
+        "authMechanism": "DEFAULT",
+        "tls": false,
+        "tlsCAFile": "",
+        "tlsCertificateKeyFile": "",
+        "tlsInsecure": false,
+        "connectTimeoutMS": "",
+        "socketTimeoutMS": "",
+        "minPoolSize": "",
+        "maxPoolSize": "",
+        "maxIdleTimeMS": "",
+        "uri": "",
+        "advanced": "",
+        "uriTabActive": "tab-uri-simple"
+    },
+    {
+        "id": "dashboard_group",
+        "type": "ui_group",
+        "name": "Gateway Comparison",
+        "tab": "3f176065.89f88",
+        "order": 2,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "3f176065.89f88",
+        "type": "ui_tab",
+        "name": "DVT Lab Dashboard",
+        "icon": "dashboard",
+        "order": 9,
+        "disabled": false,
+        "hidden": false
+    }
+]

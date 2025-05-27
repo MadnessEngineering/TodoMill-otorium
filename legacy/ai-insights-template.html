@@ -1,0 +1,420 @@
+<!-- Main AI Insights panel -->
+<div class="ai-insights-container">
+    <!-- Loading state -->
+    <div class="ai-insights-loading" ng-if="loading">
+        <div class="spinner"></div>
+        <span>Generating insights...</span>
+    </div>
+
+    <!-- Error state -->
+    <div class="ai-insights-error" ng-if="error">
+        <div class="error-icon"><i class="fa fa-exclamation-triangle"></i></div>
+        <div class="error-message">{{error}}</div>
+        <button ng-click="retryInsights()" class="retry-button">Retry</button>
+    </div>
+
+    <!-- Empty state - when no todo is selected -->
+    <div class="ai-insights-empty" ng-if="!loading && !error && (!msg.payload || !msg.payload.ai_insights)">
+        <div class="empty-icon"><i class="fa fa-lightbulb-o"></i></div>
+        <div class="empty-message">Select a todo item and click "AI Insights" to get personalized analysis</div>
+    </div>
+
+    <!-- Success state - with insights -->
+    <div class="ai-insights-panel" ng-if="!loading && !error && msg.payload && msg.payload.ai_insights">
+        <div class="ai-insights-header">
+            <span><i class="fa fa-lightbulb-o"></i> AI Insights</span>
+            <small class="ai-model-info">{{msg.payload.ai_insights.model || 'AI Assistant'}}</small>
+        </div>
+
+        <!-- Todo information summary -->
+        <div class="todo-summary" ng-if="msg.payload.todo">
+            <div class="todo-title">{{msg.payload.todo.description || 'Unknown task'}}</div>
+            <div class="todo-meta">
+                <span class="priority-badge" ng-class="'priority-' + (msg.payload.todo.current_priority || 'medium')">
+                    {{msg.payload.todo.current_priority || 'medium'}}
+                </span>
+                <span class="project-badge" ng-if="msg.payload.todo.project">
+                    {{msg.payload.todo.project}}
+                </span>
+            </div>
+        </div>
+
+        <!-- AI content -->
+        <div class="ai-insights-content">
+            <div ng-bind-html="trust(msg.payload.ai_insights.content)"></div>
+        </div>
+
+        <!-- Action suggestions -->
+        <div class="suggested-actions" ng-if="msg.payload.suggestions">
+            <h4>Suggestions</h4>
+            <div class="suggestion-item" ng-if="msg.payload.suggestions.suggested_priority">
+                <i class="fa fa-arrow-up"></i>
+                Priority: <strong>{{msg.payload.suggestions.suggested_priority}}</strong>
+            </div>
+            <div class="suggestion-item" ng-if="msg.payload.suggestions.estimated_completion_time">
+                <i class="fa fa-clock-o"></i>
+                Estimated time: <strong>{{formatTime(msg.payload.suggestions.estimated_completion_time)}}</strong>
+            </div>
+        </div>
+
+        <div class="ai-insights-footer">
+            <small>Generated: {{msg.payload.ai_insights.generated_at | date:'short'}}</small>
+        </div>
+    </div>
+
+    <!-- Debug info (hidden by default) -->
+    <div class="debug-info" ng-if="showDebug">
+        <pre>{{msg.payload | json}}</pre>
+    </div>
+</div>
+
+<script>
+    (function(scope) {
+        console.log('Initializing AI Insights template');
+
+        // Initialize state variables
+        scope.loading = false;
+        scope.error = null;
+        scope.showDebug = false;
+
+        // Access $sce service properly
+        try {
+            const $sce = angular.element(document.body).injector().get('$sce');
+
+            // Function to safely convert HTML string to trusted HTML
+            scope.trust = function(htmlContent) {
+                if (!htmlContent) {
+                    console.log('Empty HTML content provided to trust function');
+                    return '';
+                }
+                try {
+                    return $sce.trustAsHtml(htmlContent);
+                } catch (e) {
+                    console.error('Error in trustAsHtml:', e);
+                    return '';
+                }
+            };
+        } catch (e) {
+            console.error('Error setting up $sce service:', e);
+            // Fallback implementation
+            scope.trust = function(htmlContent) {
+                console.log('Using fallback trust function');
+                return htmlContent || '';
+            };
+        }
+
+        // Watch for incoming messages
+        scope.$watch('msg', function(msg) {
+            console.log('Message received in AI Insights template:', msg);
+
+            if (!msg) {
+                console.log('Empty message received');
+                return;
+            }
+
+            // Check for errors in the payload
+            if (msg.payload && msg.payload.status === "error") {
+                console.log('Error status in payload:', msg.payload);
+                scope.error = msg.payload.message || "Failed to generate insights";
+                scope.loading = false;
+                return;
+            }
+
+            // Reset error state if we have a valid payload
+            if (msg.payload && msg.payload.ai_insights) {
+                console.log('Valid AI insights payload received');
+                scope.error = null;
+            }
+
+            // Parse JSON payload if it's a string
+            if (msg.payload && typeof msg.payload === 'string') {
+                console.log('String payload received, attempting to parse as JSON');
+                try {
+                    scope.parsedPayload = JSON.parse(msg.payload);
+                    msg.payload = scope.parsedPayload; // Update the msg object
+                    console.log('Successfully parsed payload:', scope.parsedPayload);
+                } catch(e) {
+                    console.error('Error parsing payload JSON:', e);
+                    scope.error = "Error parsing response: " + e.message;
+                }
+            }
+            
+            // Set loading state based on topic
+            if (msg.topic === "todo/action/ai_analysis" || msg.topic === "todo/action/get_todo_for_insights") {
+                console.log('Setting loading state to true based on topic:', msg.topic);
+                scope.loading = true;
+            } else if (msg.topic === "todo/dashboard/insights") {
+                console.log('Setting loading state to false based on topic:', msg.topic);
+                scope.loading = false;
+            }
+        });
+
+        // Function to format time in minutes to a readable format
+        scope.formatTime = function(minutes) {
+            if (!minutes) return 'Unknown';
+
+            if (minutes < 60) {
+                return minutes + ' min';
+            } else {
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return hours + 'h ' + (mins > 0 ? mins + 'm' : '');
+            }
+        };
+
+        // Function to retry getting insights
+        scope.retryInsights = function() {
+            scope.error = null;
+            scope.loading = true;
+
+            // Send retry message back to the flow
+            const todoId = scope.msg && scope.msg.payload && scope.msg.payload.todo ?
+                scope.msg.payload.todo.id : null;
+
+            if (todoId) {
+                scope.send({
+                    topic: "todo/action/get_todo_for_insights",
+                    payload: { id: todoId }
+                });
+            } else {
+                scope.error = "No todo ID available for retry";
+                scope.loading = false;
+            }
+        };
+
+        // Toggle debug info
+        scope.toggleDebug = function() {
+            scope.showDebug = !scope.showDebug;
+        };
+    })(scope);
+</script>
+
+<style>
+    .ai-insights-container {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        position: relative;
+        min-height: 100px;
+    }
+
+    /* Loading state */
+    .ai-insights-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 30px;
+        color: #4285f4;
+    }
+
+    .spinner {
+        border: 3px solid rgba(66, 133, 244, 0.2);
+        border-top: 3px solid #4285f4;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Error state */
+    .ai-insights-error {
+        padding: 15px;
+        border-radius: 4px;
+        background-color: rgba(255, 235, 235, 0.5);
+        border-left: 3px solid #f44336;
+        margin-top: 10px;
+        text-align: center;
+    }
+
+    .error-icon {
+        color: #f44336;
+        font-size: 24px;
+        margin-bottom: 10px;
+    }
+
+    .retry-button {
+        margin-top: 10px;
+        padding: 5px 15px;
+        background-color: #f1f1f1;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .retry-button:hover {
+        background-color: #e5e5e5;
+    }
+
+    /* Empty state */
+    .ai-insights-empty {
+        padding: 30px;
+        text-align: center;
+        color: #888;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+
+    .empty-icon {
+        font-size: 24px;
+        margin-bottom: 10px;
+        color: #bbb;
+    }
+
+    /* Main insights panel */
+    .ai-insights-panel {
+        margin-top: 10px;
+        padding: 15px;
+        border-radius: 4px;
+        background-color: rgba(240, 248, 255, 0.5);
+        border-left: 3px solid #4285f4;
+    }
+
+    .ai-insights-header {
+        font-weight: bold;
+        margin-bottom: 12px;
+        color: #4285f4;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .ai-model-info {
+        font-size: 0.8em;
+        color: #888;
+    }
+
+    /* Todo summary */
+    .todo-summary {
+        margin-bottom: 15px;
+        padding: 10px;
+        background-color: rgba(240, 240, 240, 0.5);
+        border-radius: 4px;
+    }
+
+    .todo-title {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    .todo-meta {
+        display: flex;
+        gap: 8px;
+    }
+
+    .priority-badge {
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        text-transform: uppercase;
+    }
+
+    .priority-high {
+        background-color: #ffebee;
+        color: #d32f2f;
+    }
+
+    .priority-medium, .priority-initial {
+        background-color: #fff8e1;
+        color: #ff8f00;
+    }
+
+    .priority-low {
+        background-color: #e8f5e9;
+        color: #388e3c;
+    }
+
+    .project-badge {
+        padding: 2px 8px;
+        border-radius: 10px;
+        background-color: #e3f2fd;
+        color: #1976d2;
+        font-size: 0.8em;
+    }
+
+    .ai-insights-content {
+        font-size: 0.95em;
+        line-height: 1.5;
+        white-space: pre-line;
+        padding: 5px 0;
+    }
+
+    .ai-insights-content ul {
+        padding-left: 20px;
+        margin: 5px 0;
+    }
+
+    /* Suggested actions */
+    .suggested-actions {
+        margin-top: 15px;
+        background-color: rgba(232, 245, 233, 0.5);
+        padding: 10px;
+        border-radius: 4px;
+    }
+
+    .suggested-actions h4 {
+        margin-top: 0;
+        margin-bottom: 8px;
+        color: #2e7d32;
+        font-size: 0.9em;
+    }
+
+    .suggestion-item {
+        margin-bottom: 5px;
+        font-size: 0.9em;
+    }
+
+    .ai-insights-footer {
+        margin-top: 12px;
+        text-align: right;
+        color: #888;
+        font-size: 0.8em;
+    }
+
+    .ai-insight-point, .ai-insight-bullet {
+        margin-bottom: 10px;
+        display: flex;
+    }
+
+    .ai-point-number, .ai-bullet-point {
+        margin-right: 8px;
+        font-weight: bold;
+        color: #4285f4;
+    }
+
+    /* Debug info */
+    .debug-info {
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f5f5f5;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.8em;
+        overflow-x: auto;
+    }
+
+    /* Debug toggle */
+    .debug-toggle {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        font-size: 12px;
+        color: #ccc;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+    }
+
+    .debug-toggle:hover {
+        color: #999;
+    }
+</style>
+
+<!-- Hidden debug toggle (double-click bottom right of panel) -->
+<div class="debug-toggle" ng-dblclick="toggleDebug()">•</div>
