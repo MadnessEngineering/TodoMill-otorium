@@ -5,6 +5,11 @@ Welcome to the **Todomill Projectorium**—where your task management nightmares
 
 ## 🧠 Overview
 
+### 📸 Dashboard Preview
+
+![Dashboard Beta Preview](assets/Dashboard-beta.png)
+
+
 Todomill Projectorium is a Node-RED-powered dashboard for managing todos, running as a sub-repository of the greater Omnispindle hivemind. It enables AI agents to interact with a MongoDB-backed todo list through an unholy alliance of automation, insight, and user control.
 
 This dashboard serves as the CENTRAL NERVOUS SYSTEM for your chaotic thoughts, organizing them into manageable todo items that can be filtered, sorted, and enhanced with AI-powered insights!
@@ -33,6 +38,7 @@ This dashboard serves as the CENTRAL NERVOUS SYSTEM for your chaotic thoughts, o
 - Omnispindle's Python MCP server enables AGENT-DRIVEN AUTOMATION
 - Cross-project orchestration for HIVE MIND CONSCIOUSNESS
 - Message patterns and MongoDB queries harmonized for SEAMLESS DATA FLOW
+
 
 ## 📂 Project Structure
 
@@ -110,4 +116,4 @@ Todomill_projectorium/
 
 ---
 
-*"In the chaotic symphony of tasks, Todomill Projectorium conducts with MANIACAL PRECISION!"* 
+*"In the chaotic symphony of tasks, Todomill Projectorium conducts with MANIACAL PRECISION!"*
